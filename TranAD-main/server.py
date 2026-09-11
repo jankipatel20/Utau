@@ -43,6 +43,7 @@ except ImportError:
 
 from src.models import STP_TranAD
 from src.rl_policy_manager import RLPolicyManager
+from revenue_loss import RevenueLossTracker
 
 app = FastAPI(title="STP-TranAD Streaming Inference Engine")
 
@@ -146,6 +147,14 @@ FEATURE_ANOMALY_SOURCE_TAB = _env_flag("FEATURE_ANOMALY_SOURCE_TAB", "true")
 FEATURE_DATA_SOURCE_TAB = _env_flag("FEATURE_DATA_SOURCE_TAB", "true")
 FEATURE_RL_POLICY_SUGGESTIONS = _env_flag("FEATURE_RL_POLICY_SUGGESTIONS")
 SOURCE_REGISTRY_PATH = os.getenv("SOURCE_REGISTRY_PATH", os.path.join(_SERVER_DIR, "results", "data_sources.json"))
+
+# Revenue/energy-loss estimation controls
+REVENUE_PRICE_PER_KWH = float(os.getenv("REVENUE_PRICE_PER_KWH", "0.12"))
+REVENUE_SAMPLING_INTERVAL_HOURS = float(os.getenv("REVENUE_SAMPLING_INTERVAL_HOURS", str(1.0 / 3600.0)))
+revenue_tracker = RevenueLossTracker(
+    price_per_kwh=REVENUE_PRICE_PER_KWH,
+    sampling_interval_hours=REVENUE_SAMPLING_INTERVAL_HOURS,
+)
 
 # Phase 8 RL suggestion-only controls
 RL_POLICY_STATE_PATH = os.getenv("RL_POLICY_STATE_PATH", os.path.join("results", "rl_policy_state.json"))
@@ -487,6 +496,23 @@ def _parse_telemanom_classes(spacecraft: str, chan_id: str) -> list[str]:
         return []
     return found
 
+_domain_schema_cache: dict[str, dict] = {}
+
+def _load_domain_schema(dataset: str) -> Optional[dict]:
+    if dataset in _domain_schema_cache:
+        return _domain_schema_cache[dataset]
+    domain = dataset.replace("_synthetic", "")
+    schema_path = os.path.join(_SERVER_DIR, "schemas", f"{domain}_schema.json")
+    if not os.path.exists(schema_path):
+        return None
+    try:
+        with open(schema_path, "r", encoding="utf-8") as f:
+            schema = json.load(f)
+        _domain_schema_cache[dataset] = schema
+        return schema
+    except Exception:
+        return None
+
 def _build_real_dataset_sensor_map(dataset: str, source_id: str, feature_count: int) -> dict[str, str]:
     ds = str(dataset or "").strip()
     src = str(source_id or "").strip()
@@ -515,6 +541,16 @@ def _build_real_dataset_sensor_map(dataset: str, source_id: str, feature_count: 
     elif ds == "synthetic":
         for idx in range(feature_count):
             labels[f"s{idx}"] = f"Synthetic signal {idx + 1:02d}"
+    elif ds in {"solar_synthetic", "wind_synthetic"}:
+        schema = _load_domain_schema(ds)
+        if schema and "fields" in schema:
+            for field in schema["fields"]:
+                idx = field["index"]
+                if idx < feature_count:
+                    labels[f"s{idx}"] = f"{field['label']} ({field['unit']})"
+        for idx in range(feature_count):
+            if f"s{idx}" not in labels:
+                labels[f"s{idx}"] = f"{ds} feature {idx + 1:02d}"
     else:
         for idx in range(feature_count):
             labels[f"s{idx}"] = f"{ds} feature {idx + 1:02d}"
@@ -590,7 +626,7 @@ def _append_influx_deadletter(batch: list[dict], reason: str):
         f.write(json.dumps(payload) + "\n")
 
 _SOURCE_PROTOCOLS = {"kafka", "mqtt", "opcua", "http"}
-_SOURCE_DATASETS = {"SMD", "MSL", "SMAP", "ESP32", "synthetic"}
+_SOURCE_DATASETS = {"SMD", "MSL", "SMAP", "ESP32", "synthetic", "solar_synthetic", "wind_synthetic"}
 _SOURCE_SECRET_KEYS = ("token", "password", "secret", "key")
 _MODEL_DATASET_ALIASES = {
     "ESP32": "synthetic",
@@ -601,6 +637,8 @@ _DATASET_FEATURE_SOURCE = {
     "SMAP": "A-1",
     "synthetic": "synthetic",
     "ESP32": "esp32-replay",
+    "solar_synthetic": "solar_synthetic",
+    "wind_synthetic": "wind_synthetic",
 }
 
 def _mask_secret(value: Any) -> str:
@@ -648,8 +686,9 @@ def _normalize_dataset_name(dataset: Optional[str]) -> Optional[str]:
     text = str(dataset).strip()
     if text == "":
         return None
-    if text.lower() == "synthetic":
-        return "synthetic"
+    low = text.lower()
+    if low in {"synthetic", "solar_synthetic", "wind_synthetic"}:
+        return low
     up = text.upper()
     return up
 
@@ -691,7 +730,7 @@ def _validate_source_payload(raw: dict[str, Any], partial: bool) -> tuple[dict[s
     if "dataset" in raw:
         dataset = _normalize_dataset_name(raw.get("dataset"))
         if dataset is not None and dataset not in _SOURCE_DATASETS:
-            errors.append("dataset must be one of SMD, MSL, SMAP, ESP32, synthetic")
+            errors.append(f"dataset must be one of: {', '.join(sorted(_SOURCE_DATASETS))}")
         else:
             normalized["dataset"] = dataset
     elif not partial:
@@ -2276,6 +2315,9 @@ def init_model(target_ds=None):
     elif storage_ds == 'synthetic':
         feature_source_id = "esp32-replay" if str(target_ds) == "ESP32" else "synthetic"
         test_arr = np.load(f'processed/{storage_ds}/test.npy')
+    elif storage_ds in {'solar_synthetic', 'wind_synthetic'}:
+        feature_source_id = storage_ds
+        test_arr = np.load(f'processed/{storage_ds}/test.npy')
     else:
         raise ValueError(f"Unsupported dataset for STP server: {target_ds}")
         
@@ -2564,7 +2606,16 @@ async def get_status():
         },
         "kafka": kafka_state,
         "influx": influx_state,
+        "revenue_loss": revenue_tracker.get_aggregate(),
     }
+
+@app.get("/api/revenue_loss")
+async def get_revenue_loss_all():
+    return revenue_tracker.get_all_summaries()
+
+@app.get("/api/revenue_loss/{asset_id}")
+async def get_revenue_loss_asset(asset_id: str):
+    return revenue_tracker.get_asset_summary(asset_id)
 
 @app.get("/sources")
 async def list_sources():
@@ -2861,7 +2912,7 @@ async def get_feedback_history_api(limit: int = 5):
 @app.post("/change_dataset")
 async def trigger_dataset_swap(req: SwapRequest):
     global DATASET, model, optimizer, feats_dim
-    if req.dataset not in ['SMD', 'MSL', 'SMAP', 'ESP32', 'synthetic']:
+    if req.dataset not in ['SMD', 'MSL', 'SMAP', 'ESP32', 'synthetic', 'solar_synthetic', 'wind_synthetic']:
         return {"error": "Invalid Dataset"}
     if req.dataset == DATASET:
         return {"status": "noop", "new_dataset": DATASET, "new_dim": feats_dim}
@@ -2889,7 +2940,8 @@ async def trigger_dataset_swap(req: SwapRequest):
         ft_optimizer = torch.optim.Adam(new_model.parameters(), lr=FT_LR, weight_decay=1e-5)
         feats_dim = new_feats
         _reset_ingestion_state(feats_dim)
-        
+        revenue_tracker.reset()
+
         # Flush baseline frames to buffer
         live_buffer.clear()
         for _ in range(101):
@@ -3526,6 +3578,13 @@ async def websocket_endpoint(websocket: WebSocket):
             else:
                 anomaly_streak = 0
 
+            actual_kw, expected_kw = RevenueLossTracker.extract_power_fields(DATASET, actual_sensors)
+            loss_info = revenue_tracker.update(
+                dataset=DATASET, asset_id="default", tick=current_tick,
+                is_anomalous=is_anomalous,
+                actual_power_kw=actual_kw, expected_power_kw=expected_kw,
+            )
+
             severity_score, severity_level, confidence = _severity_and_confidence(fused_score, fused_threshold)
             anomaly_type = _classify_anomaly_type(
                 last_score_meta["recon_score"],
@@ -3611,7 +3670,21 @@ async def websocket_endpoint(websocket: WebSocket):
                     "predicted_ttf": predicted_ttf_ticks,
                     "rul_status": rul_status,
                 },
+                "revenue_loss": loss_info,
             }
+
+            if is_anomalous and loss_info.get("current_deficit_rate_kw", 0) > 0:
+                _enqueue_influx(
+                    "revenue_loss",
+                    {"dataset": DATASET, "asset_id": loss_info.get("asset_id", "default")},
+                    {
+                        "tick": int(current_tick),
+                        "energy_loss_kwh": float(loss_info.get("cumulative_energy_loss_kwh", 0)),
+                        "revenue_loss_usd": float(loss_info.get("cumulative_revenue_loss_usd", 0)),
+                        "deficit_rate_kw": float(loss_info.get("current_deficit_rate_kw", 0)),
+                        "anomaly_duration_ticks": int(loss_info.get("anomaly_duration_ticks", 0)),
+                    },
+                )
 
             _enqueue_influx(
                 "anomaly_scores",
