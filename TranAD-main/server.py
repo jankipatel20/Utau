@@ -2103,6 +2103,28 @@ def _build_anomaly_source_payload(event: dict[str, Any]) -> dict[str, Any]:
         "sop_history": list(event.get("sop_history", [])),
     }
 
+def _build_domain_context(dataset: str) -> str:
+    schema = _load_domain_schema(dataset)
+    if not schema:
+        return ""
+    domain = schema.get("dataset_type", "unknown")
+    asset_label = schema.get("asset_label", "Asset")
+    fields = schema.get("fields", [])
+    field_desc = ", ".join(f"{f['label']} ({f['unit']})" for f in fields[:8])
+    fault_types = schema.get("fault_types", [])
+    fault_desc = "; ".join(f"{ft['name']}: {ft['description']}" for ft in fault_types)
+    rev = revenue_tracker.get_aggregate()
+    rev_line = ""
+    if rev.get("total_energy_loss_kwh", 0) > 0:
+        rev_line = f"\nCurrent estimated revenue loss: ${rev['total_revenue_loss_usd']:.2f} ({rev['total_energy_loss_kwh']:.4f} kWh lost)."
+
+    return f"""
+DOMAIN: {domain.upper()} PREDICTIVE MAINTENANCE ({asset_label})
+Sensor fields: {field_desc}
+Known fault patterns for {domain}: {fault_desc}
+IMPORTANT: Root-cause attribution is inherently uncertain. Use hedged language like "this pattern is consistent with" or "likely indicates" rather than definitive claims like "this is caused by". Weather and environmental confounds (irradiance, wind speed, temperature) can produce signatures similar to real faults.{rev_line}
+"""
+
 def _fallback_sop(event: dict[str, Any], request: SOPRequest) -> str:
     top_sensor = str(event.get("top_sensor", "n/a"))
     anomaly_type = str(event.get("anomaly_type", "unknown"))
@@ -2153,10 +2175,14 @@ def _build_sop_llm_prompt(event: dict[str, Any], request: SOPRequest) -> str:
         "constraints": request.constraints,
         "event": source_payload,
     }
+    domain_ctx = _build_domain_context(DATASET)
+    base_role = "You are an industrial anomaly response engineer."
+    if domain_ctx:
+        base_role = f"You are a predictive maintenance engineer specializing in renewable energy assets.\n{domain_ctx}"
     return (
-        "You are an industrial anomaly response engineer. "
+        f"{base_role}\n"
         "Generate a concise, practical SOP with numbered steps, verification checks, "
-        "and rollback criteria. Focus on prevention at sensor source. "
+        "and rollback criteria. Use hedged language for root-cause claims. "
         "Return plain text only. Input JSON follows:\n" + json.dumps(compact, ensure_ascii=True)
     )
 
@@ -2186,7 +2212,7 @@ def _generate_sop_with_llm(event: dict[str, Any], request: SOPRequest) -> str:
         "messages": [
             {
                 "role": "system",
-                "content": "You write precise incident SOPs for sensor anomalies.",
+                "content": "You write precise incident SOPs for sensor anomalies in industrial and renewable energy systems. " + (_build_domain_context(DATASET) if DATASET in {"solar_synthetic", "wind_synthetic"} else ""),
             },
             {
                 "role": "user",
@@ -2714,6 +2740,19 @@ async def get_revenue_loss_asset(asset_id: str):
 @app.get("/api/fleet/summary")
 async def get_fleet_summary():
     return _get_fleet_summary()
+
+@app.get("/api/domain_context")
+async def get_domain_context():
+    schema = _load_domain_schema(DATASET)
+    rev = revenue_tracker.get_aggregate()
+    return {
+        "dataset": DATASET,
+        "domain": schema.get("dataset_type", "generic") if schema else "generic",
+        "asset_label": schema.get("asset_label", "Asset") if schema else "Asset",
+        "fields": [{"name": f["name"], "label": f["label"], "unit": f["unit"], "category": f["category"]} for f in schema.get("fields", [])] if schema else [],
+        "fault_types": [{"name": ft["name"], "description": ft["description"]} for ft in schema.get("fault_types", [])] if schema else [],
+        "revenue_loss": rev,
+    }
 
 @app.get("/sources")
 async def list_sources():

@@ -35,6 +35,7 @@ export default function ChatbotPopup({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
+  const [domainContext, setDomainContext] = useState<any>(null);
   const [pulse, setPulse] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,7 +61,13 @@ export default function ChatbotPopup({
     }
   }, [alertExplanation, isOpen]);
 
-  // Load feedback history for richer context
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/domain_context')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDomainContext(d); })
+      .catch(() => {});
+  }, [activeDataset, isOpen]);
+
   useEffect(() => {
     fetch('http://127.0.0.1:8000/api/feedback_history?limit=10')
       .then(r => r.ok ? r.json() : [])
@@ -91,9 +98,23 @@ export default function ChatbotPopup({
         ).join('\n')
       : '- No feedback records.';
 
-    return `You are UTAU-CORE, an elite IIoT anomaly detection AI embedded in a real-time command center.
-You have access to live telemetry and an operator feedback database.
+    const isDomain = domainContext && domainContext.domain !== 'generic';
+    const domainBlock = isDomain
+      ? `\n## DOMAIN: ${domainContext.domain.toUpperCase()} PREDICTIVE MAINTENANCE
+- Asset: ${domainContext.asset_label}
+- Sensors: ${domainContext.fields?.map((f: any) => `${f.label} (${f.unit})`).join(', ') || 'n/a'}
+- Known faults: ${domainContext.fault_types?.map((ft: any) => ft.name).join(', ') || 'n/a'}
+- Revenue loss: $${domainContext.revenue_loss?.total_revenue_loss_usd?.toFixed(2) || '0.00'}
+`
+      : '';
 
+    const role = isDomain
+      ? `You are UTAU-CORE, a predictive maintenance AI for ${domainContext.domain} energy assets.`
+      : 'You are UTAU-CORE, an elite IIoT anomaly detection AI embedded in a real-time command center.';
+
+    return `${role}
+You have access to live telemetry and an operator feedback database.
+${domainBlock}
 ## LIVE TELEMETRY
 - Dataset: ${activeDataset || 'UNKNOWN'}
 - System State: ${systemState || 'UNKNOWN'}
@@ -108,7 +129,9 @@ ${dbBlock}
 2. Lead with the most critical finding.
 3. Use Markdown formatting (bold, bullet lists, headers).
 4. Never speculate beyond available data.
-5. Reference DB records by number (#1, #2) when relevant.`;
+5. Reference DB records by number (#1, #2) when relevant.${isDomain ? `
+6. Use hedged language for root-cause claims ("consistent with", "likely indicates").
+7. Reference domain-specific fault patterns when explaining anomalies.` : ''}`;
   };
 
   const handleSend = async (e?: React.FormEvent) => {

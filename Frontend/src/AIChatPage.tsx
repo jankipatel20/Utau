@@ -29,12 +29,20 @@ export default function AIChatPage({ onBack, systemState, activeDataset, alertEx
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [feedbackHistory, setFeedbackHistory] = useState<any[]>([]);
+  const [domainContext, setDomainContext] = useState<any>(null);
   const [dbStatus, setDbStatus] = useState<'connecting' | 'live' | 'offline'>('connecting');
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/domain_context')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setDomainContext(d); })
+      .catch(() => {});
+  }, [activeDataset]);
 
   useEffect(() => {
     const loadFeedback = () => {
@@ -77,9 +85,23 @@ export default function AIChatPage({ onBack, systemState, activeDataset, alertEx
         ).join('\n')
       : '- No records available. Backend may be offline.';
 
-    return `You are UTAU-CORE, an elite industrial AI embedded inside a hardened IIoT command center.
-You have DIRECT READ ACCESS to live telemetry, real-time anomaly scores, and the operator feedback database.
+    const isDomain = domainContext && domainContext.domain !== 'generic';
+    const domainBlock = isDomain
+      ? `\n## DOMAIN CONTEXT: ${domainContext.domain.toUpperCase()} PREDICTIVE MAINTENANCE
+- **Asset Type**: ${domainContext.asset_label}
+- **Sensor Fields**: ${domainContext.fields?.map((f: any) => `${f.label} (${f.unit})`).join(', ') || 'n/a'}
+- **Known Fault Patterns**: ${domainContext.fault_types?.map((ft: any) => `**${ft.name}**: ${ft.description}`).join('; ') || 'n/a'}
+- **Revenue Impact**: $${domainContext.revenue_loss?.total_revenue_loss_usd?.toFixed(2) || '0.00'} total loss (${domainContext.revenue_loss?.total_energy_loss_kwh?.toFixed(4) || '0'} kWh)
+`
+      : '';
 
+    const roleDesc = isDomain
+      ? `You are UTAU-CORE, a predictive maintenance AI for ${domainContext.domain} energy assets.`
+      : 'You are UTAU-CORE, an elite industrial AI embedded inside a hardened IIoT command center.';
+
+    return `${roleDesc}
+You have DIRECT READ ACCESS to live telemetry, real-time anomaly scores, and the operator feedback database.
+${domainBlock}
 ## LIVE TELEMETRY CONTEXT
 - **Dataset**: ${activeDataset || 'UNKNOWN'}
 - **System State**: **${systemState || 'UNKNOWN'}**
@@ -90,12 +112,15 @@ ${metricsLine}
 ${dbBlock}
 
 ## YOUR RESPONSE RULES
-1. **Be direct and terse** — this is a military-grade terminal. Never say "I would be happy to", "please let me know", or "if you would like". Just execute the analysis.
+1. **Be direct and terse** — this is a military-grade terminal. No filler phrases.
 2. **Lead with the most critical finding** — never bury the important info.
 3. **Always cite DB record numbers** (#1, #2) when referencing past incidents.
-4. **Format every response using Markdown** — use ## headers, **bold** for numbers/sensors/severities, bullet lists for multi-point analysis. Do not output raw asterisks or markdown symbols literally.
+4. **Format every response using Markdown** — use ## headers, **bold** for numbers/sensors/severities, bullet lists for multi-point analysis.
 5. **Never invent or speculate** beyond what is present in the telemetry context and DB above.
-6. **If asked a question with data available**, answer it fully and concisely without asking for further permission.`;
+6. **If asked a question with data available**, answer it fully and concisely without asking for further permission.${isDomain ? `
+7. **Use hedged causal language** — say "this pattern is consistent with" or "likely indicates" rather than definitive "caused by" claims. Root-cause attribution in renewable energy assets is inherently uncertain due to weather confounds.
+8. **Reference domain-specific fault types** when explaining anomalies — use the known fault patterns above to reason toward plausible explanations.` : ''}`;
+  };
   };
 
   const handleSend = async (e?: React.FormEvent) => {
