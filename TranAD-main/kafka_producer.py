@@ -16,7 +16,7 @@ DEFAULT_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "127.0.0.1:29092")
 DEFAULT_HZ = float(os.getenv("PRODUCER_HZ", "1.0"))
 DEFAULT_STATUS_URL = os.getenv("BACKEND_STATUS_URL", "http://127.0.0.1:8000/status")
 
-SUPPORTED_DATASETS = {"SMD", "MSL", "SMAP", "synthetic", "ESP32", "demo"}
+SUPPORTED_DATASETS = {"SMD", "MSL", "SMAP", "synthetic", "ESP32", "demo", "solar_synthetic", "wind_synthetic"}
 
 
 def fetch_active_dataset(status_url: str, timeout_sec: float) -> Optional[str]:
@@ -50,6 +50,8 @@ def load_dataset_array(dataset: str, file_path: Optional[str]) -> np.ndarray:
                 path = "processed/synthetic/test.npy"
         elif dataset == "demo":
             path = "processed/synthetic/demo_synthetic_50sig_5min.npy"
+        elif dataset in {"solar_synthetic", "wind_synthetic"}:
+            path = f"processed/{dataset}/test.npy"
         else:
             raise ValueError(f"Unsupported dataset: {dataset}")
         if not os.path.exists(path):
