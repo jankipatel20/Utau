@@ -1,5 +1,5 @@
 // Header.tsx — Dark Prestige UTAU Command Center Header
-import { Activity, Cpu, Radio, Zap, MessageSquare, FileDown } from 'lucide-react';
+import { Activity, Cpu, Radio, Zap, MessageSquare, FileDown, Layers } from 'lucide-react';
 
 export type SystemState = 'HEALTHY' | 'WARNING' | 'CRITICAL';
 
@@ -20,13 +20,14 @@ interface UtauHeaderProps {
   onFeatureTabChange: (tab: 'live' | 'anomaly-source' | 'data-source') => void;
   onNavigateHome: () => void;
   onNavigateToChat: () => void;
+  onNavigateToFleet: () => void;
   onGeneratePDF?: () => void;
 }
 
 export function UtauHeader({
   state, isConnected, tabs, activeDataset, isTransitioning,
   onChangeDataset, isAnomalySourceTabEnabled, isDataSourceTabEnabled, isRlPolicySuggestionsEnabled,
-  activeFeatureTab, onFeatureTabChange, onNavigateHome, onNavigateToChat, onGeneratePDF
+  activeFeatureTab, onFeatureTabChange, onNavigateHome, onNavigateToChat, onNavigateToFleet, onGeneratePDF
 }: UtauHeaderProps) {
   const color = stateColor(state);
 
@@ -106,6 +107,12 @@ export function UtauHeader({
         )}
         <button
           style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid rgba(201,146,42,0.12)', paddingLeft: 24, marginLeft: 8 }}
+          onClick={onNavigateToFleet}
+        >
+          <Layers size={12} color="var(--copper)" /> FLEET
+        </button>
+        <button
+          style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8 }}
           onClick={onNavigateToChat}
         >
           <MessageSquare size={12} color="#F0EBE0" /> AI COPILOT

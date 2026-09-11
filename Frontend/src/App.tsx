@@ -131,7 +131,7 @@
 
 //     const handlePopState = () => {
 //       let nextPath = window.location.pathname;
-//       if (nextPath !== '/landing' && nextPath !== '/ai-chat') nextPath = '/dashboard';
+//       if (nextPath !== '/landing' && nextPath !== '/ai-chat' && nextPath !== '/fleet') nextPath = '/dashboard';
 //       setCurrentPath(nextPath);
 //     };
 //     window.addEventListener('popstate', handlePopState);
@@ -401,6 +401,7 @@ import AnomalySourceTab from './components/AnomalySourceTab';
 import DataSourceTab from './components/DataSourceTab';
 import LandingPage from './LandingPage';
 import AIChatPage from './AIChatPage';
+import FleetView from './FleetView';
 import ChatbotPopup from './components/ChatbotPopup';
 
 interface AlertExplanation {
@@ -558,7 +559,7 @@ export default function App() {
 
     const handlePopState = () => {
       let nextPath = window.location.pathname;
-      if (nextPath !== '/landing' && nextPath !== '/ai-chat') nextPath = '/dashboard';
+      if (nextPath !== '/landing' && nextPath !== '/ai-chat' && nextPath !== '/fleet') nextPath = '/dashboard';
       setCurrentPath(nextPath);
     };
     window.addEventListener('popstate', handlePopState);
@@ -832,6 +833,15 @@ export default function App() {
     );
   }
 
+  if (currentPath === '/fleet') {
+    return (
+      <FleetView
+        onBack={() => navigateTo('/dashboard')}
+        activeDataset={activeDataset}
+      />
+    );
+  }
+
   return (
     <div id="utau-dashboard-capture" style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--bg-page)' }}>
 
@@ -879,6 +889,7 @@ export default function App() {
           activeFeatureTab={activeFeatureTab} onFeatureTabChange={setActiveFeatureTab}
           onNavigateHome={() => navigateTo('/landing')}
           onNavigateToChat={() => navigateTo('/ai-chat')}
+          onNavigateToFleet={() => navigateTo('/fleet')}
           onGeneratePDF={generatePDFReport}
         />
       </div>

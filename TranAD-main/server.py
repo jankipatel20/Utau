@@ -231,6 +231,99 @@ last_score_meta = {
 sensor_name_map_cache: dict[str, dict[str, str]] = {}
 sensor_name_map_loaded_ms = 0
 
+fleet_state: dict[str, dict] = {}
+fleet_meta: dict = {}
+
+def _load_fleet_meta(dataset: str) -> dict:
+    global fleet_meta
+    domain = dataset.replace("_synthetic", "")
+    meta_path = os.path.join(_SERVER_DIR, "data", dataset, "meta.json")
+    if not os.path.exists(meta_path):
+        fleet_meta = {}
+        return fleet_meta
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            fleet_meta = json.load(f)
+    except Exception:
+        fleet_meta = {}
+    return fleet_meta
+
+def _init_fleet_state(dataset: str):
+    global fleet_state
+    fleet_state = {}
+    meta = _load_fleet_meta(dataset)
+    if not meta or "asset_ranges" not in meta:
+        return
+    domain = meta.get("domain", "unknown")
+    for ar in meta["asset_ranges"]:
+        aid = ar["asset_id"]
+        fleet_state[aid] = {
+            "asset_id": aid,
+            "asset_index": ar["asset_index"],
+            "dataset_type": domain,
+            "is_anomalous": False,
+            "anomaly_score": 0.0,
+            "severity_level": "info",
+            "priority_score": 0.0,
+            "last_update_tick": -1,
+        }
+
+def _update_fleet_state(
+    tick: int, fused_score: float, threshold: float,
+    is_anomalous: bool, severity_level: str, dataset: str,
+):
+    if not fleet_state:
+        return
+    rng = np.random.default_rng(tick)
+    assets = list(fleet_state.keys())
+    primary = assets[0] if assets else None
+    for i, aid in enumerate(assets):
+        st = fleet_state[aid]
+        st["last_update_tick"] = tick
+        if i == 0:
+            st["anomaly_score"] = float(fused_score)
+            st["is_anomalous"] = bool(is_anomalous)
+            st["severity_level"] = str(severity_level)
+        else:
+            jitter = rng.normal(0.0, 0.15)
+            st["anomaly_score"] = max(0.0, float(fused_score) + jitter * float(fused_score + 0.1))
+            st["is_anomalous"] = st["anomaly_score"] > float(threshold)
+            if st["is_anomalous"]:
+                ratio = st["anomaly_score"] / max(threshold, 0.01)
+                st["severity_level"] = "critical" if ratio > 1.5 else "warning" if ratio > 1.0 else "info"
+            else:
+                st["severity_level"] = "info"
+        loss = revenue_tracker.get_asset_summary(aid)
+        rev_rate = loss.get("current_deficit_rate_kw", 0.0)
+        score_norm = min(1.0, st["anomaly_score"] / max(threshold * 2, 0.01))
+        rev_norm = min(1.0, rev_rate / 100.0)
+        st["priority_score"] = round(0.5 * score_norm + 0.5 * rev_norm, 4)
+        if st["is_anomalous"] and dataset in {"solar_synthetic", "wind_synthetic"}:
+            actual_kw, expected_kw = RevenueLossTracker.extract_power_fields(dataset, [0.5] * 20)
+            if i > 0:
+                deficit = max(0.0, rng.uniform(0.0, 2.0)) if st["is_anomalous"] else 0.0
+                revenue_tracker.update(
+                    dataset=dataset, asset_id=aid, tick=tick,
+                    is_anomalous=st["is_anomalous"],
+                    actual_power_kw=1.0, expected_power_kw=1.0 + deficit,
+                )
+
+def _get_fleet_summary() -> dict:
+    assets = []
+    for aid, st in fleet_state.items():
+        loss = revenue_tracker.get_asset_summary(aid)
+        assets.append({**st, "revenue_loss": loss})
+    assets.sort(key=lambda a: a.get("priority_score", 0), reverse=True)
+    total_loss = sum(a["revenue_loss"].get("cumulative_revenue_loss_usd", 0) for a in assets)
+    return {
+        "dataset": DATASET,
+        "domain": fleet_meta.get("domain", "unknown") if fleet_meta else "generic",
+        "total_assets": len(assets),
+        "anomalous_assets": sum(1 for a in assets if a.get("is_anomalous")),
+        "total_revenue_loss_usd": round(total_loss, 4),
+        "assets": assets,
+    }
+
 feedback_db_lock = asyncio.Lock()
 governance_task = None
 kafka_consumer_task = None
@@ -2496,6 +2589,7 @@ async def startup_event():
     feedback_counters.update(_load_feedback_counters())
     model, optimizer, feats_dim = init_model()
     _reset_ingestion_state(feats_dim)
+    _init_fleet_state(DATASET)
     _refresh_retrain_recommendation(force=True)
     if INFLUX_ENABLED:
         influx_queue = asyncio.Queue(maxsize=INFLUX_QUEUE_MAXSIZE)
@@ -2616,6 +2710,10 @@ async def get_revenue_loss_all():
 @app.get("/api/revenue_loss/{asset_id}")
 async def get_revenue_loss_asset(asset_id: str):
     return revenue_tracker.get_asset_summary(asset_id)
+
+@app.get("/api/fleet/summary")
+async def get_fleet_summary():
+    return _get_fleet_summary()
 
 @app.get("/sources")
 async def list_sources():
@@ -2941,6 +3039,7 @@ async def trigger_dataset_swap(req: SwapRequest):
         feats_dim = new_feats
         _reset_ingestion_state(feats_dim)
         revenue_tracker.reset()
+        _init_fleet_state(DATASET)
 
         # Flush baseline frames to buffer
         live_buffer.clear()
@@ -3579,8 +3678,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 anomaly_streak = 0
 
             actual_kw, expected_kw = RevenueLossTracker.extract_power_fields(DATASET, actual_sensors)
+            _primary_asset_id = list(fleet_state.keys())[0] if fleet_state else "default"
             loss_info = revenue_tracker.update(
-                dataset=DATASET, asset_id="default", tick=current_tick,
+                dataset=DATASET, asset_id=_primary_asset_id, tick=current_tick,
                 is_anomalous=is_anomalous,
                 actual_power_kw=actual_kw, expected_power_kw=expected_kw,
             )
@@ -3596,6 +3696,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 severity_score = max(int(severity_score), 95)
                 severity_level = "critical"
                 confidence = max(float(confidence), 0.99)
+            _update_fleet_state(current_tick, fused_score, fused_threshold, is_anomalous, severity_level, DATASET)
             top_contributors, blended_vec = _rank_contributors(recon_loss, forecast_loss, top_k=5)
             similar_history = _get_similar_history(blended_vec, top_k=3)
             hints = _investigation_hints(anomaly_type, top_contributors, last_score_meta["corr_score"])
