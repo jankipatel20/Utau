@@ -121,7 +121,6 @@ ${dbBlock}
 7. **Use hedged causal language** — say "this pattern is consistent with" or "likely indicates" rather than definitive "caused by" claims. Root-cause attribution in renewable energy assets is inherently uncertain due to weather confounds.
 8. **Reference domain-specific fault types** when explaining anomalies — use the known fault patterns above to reason toward plausible explanations.` : ''}`;
   };
-  };
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();

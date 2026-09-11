@@ -57,7 +57,7 @@ export function HeroSection({ data, systemState, dimensions }: { data: any[]; sy
   );
 }
 
-export function ResidualSection({ data, dimensions, hotSensors }: { data: any[]; dimensions: number; hotSensors: Set<string>; isTransitioning?: boolean; activeDataset?: string }) {
+export function ResidualSection({ data, dimensions, hotSensors, sensorLabels }: { data: any[]; dimensions: number; hotSensors: Set<string>; isTransitioning?: boolean; activeDataset?: string; sensorLabels?: string[] }) {
   return (
     <div className="panel" style={{ padding: '10px 12px 6px', height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
@@ -79,8 +79,8 @@ export function ResidualSection({ data, dimensions, hotSensors }: { data: any[];
               boxShadow: isHot ? `inset 0 0 10px rgba(168,50,64,0.1), 0 0 8px rgba(168,50,64,0.1)` : 'none',
               display: 'flex', flexDirection: 'column',
             }}>
-              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 7, color: isHot ? CR : TD, letterSpacing: '0.12em', marginBottom: 2 }}>
-                S{String(i).padStart(2, '0')}
+              <div style={{ fontFamily: "'Cinzel', serif", fontSize: 7, color: isHot ? CR : TD, letterSpacing: '0.10em', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sensorLabels?.[i] || `S${String(i).padStart(2, '0')}`}>
+                {sensorLabels?.[i] || `S${String(i).padStart(2, '0')}`}
               </div>
               <div style={{ flex: 1 }}>
                 <ResponsiveContainer width="100%" height="100%">

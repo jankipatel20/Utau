@@ -431,6 +431,8 @@ const DATASET_TABS = [
   { label: 'SMAP',      value: 'SMAP'      },
   { label: 'ESP32',     value: 'ESP32'     },
   { label: 'Synthetic', value: 'synthetic' },
+  { label: 'Solar',     value: 'solar_synthetic' },
+  { label: 'Wind',      value: 'wind_synthetic'  },
 ];
 
 const featureFlag = (value: unknown, defaultValue = false): boolean => {
@@ -462,6 +464,8 @@ export default function App() {
   // retrainRecommended mirrors retrain_state["recommended"].
   const [modelVersion,          setModelVersion]          = useState<string>('default');
   const [retrainRecommended,    setRetrainRecommended]    = useState<boolean>(false);
+  const [sensorLabels,          setSensorLabels]          = useState<string[]>([]);
+  const [revenueLoss,            setRevenueLoss]           = useState<any>(null);
 
   // ── NEW: rolling sensor buffer — last 110 frames × n_feats ───────────────
   // Each entry is an ordered array of raw sensor values matching live_buffer in server.py.
@@ -503,6 +507,19 @@ export default function App() {
     const id = window.setInterval(fetchStatus, 10_000);
     return () => window.clearInterval(id);
   }, []); // runs once; modelVersion intentionally excluded to avoid restart loop
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/domain_context')
+      .then(r => r.ok ? r.json() : null)
+      .then(ctx => {
+        if (ctx && ctx.fields && ctx.fields.length > 0) {
+          setSensorLabels(ctx.fields.map((f: any) => `${f.label} (${f.unit})`));
+        } else {
+          setSensorLabels([]);
+        }
+      })
+      .catch(() => setSensorLabels([]));
+  }, [activeDataset]);
 
   const generatePDFReport = async () => {
     try {
@@ -617,6 +634,7 @@ export default function App() {
         if (payload.alert_explanation) setAlertExplanation(payload.alert_explanation);
         if (payload.anomaly_source) setAnomalySource(payload.anomaly_source);
         if (payload.score_components) setScoreComponents(payload.score_components);
+        if (payload.revenue_loss) setRevenueLoss(payload.revenue_loss);
 
         setData(prev => {
           if (prev.length >= MAX_CHART_POINTS) {
@@ -923,7 +941,7 @@ export default function App() {
               <HeroSection data={data} systemState={systemState} dimensions={dimensions} />
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
-              <ResidualSection data={data} dimensions={dimensions} activeDataset={activeDataset} hotSensors={hotSensors} />
+              <ResidualSection data={data} dimensions={dimensions} activeDataset={activeDataset} hotSensors={hotSensors} sensorLabels={sensorLabels} />
             </div>
           </div>
 
@@ -932,7 +950,32 @@ export default function App() {
             <PredictiveRULPanel alertExplanation={alertExplanation} activeDataset={activeDataset} />
             <RootCausePanel alertExplanation={alertExplanation} />
             <SimilarIncidents alertExplanation={alertExplanation} />
-            {/* ── UPDATED GovernancePanel — now receives model version + retrain state ── */}
+            {revenueLoss && (activeDataset === 'solar_synthetic' || activeDataset === 'wind_synthetic') && (
+              <div className="panel" style={{ flexShrink: 0, padding: '10px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <span className="section-label" style={{ color: revenueLoss.anomaly_active ? 'var(--crimson)' : 'var(--gold)' }}>REVENUE IMPACT</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div className="panel-recessed" style={{ padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 7, color: 'var(--text-dim)', letterSpacing: '0.15em', marginBottom: 4 }}>ENERGY LOSS</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: revenueLoss.cumulative_energy_loss_kwh > 0 ? 'var(--copper)' : 'var(--text-secondary)' }}>
+                      {Number(revenueLoss.cumulative_energy_loss_kwh || 0).toFixed(4)} kWh
+                    </div>
+                  </div>
+                  <div className="panel-recessed" style={{ padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 7, color: 'var(--text-dim)', letterSpacing: '0.15em', marginBottom: 4 }}>REVENUE LOSS</div>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: revenueLoss.cumulative_revenue_loss_usd > 0 ? 'var(--crimson)' : 'var(--text-secondary)' }}>
+                      ${Number(revenueLoss.cumulative_revenue_loss_usd || 0).toFixed(4)}
+                    </div>
+                  </div>
+                </div>
+                {revenueLoss.anomaly_active && (
+                  <div style={{ marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--crimson)', textAlign: 'center' }}>
+                    ACTIVE DEFICIT: -{Number(revenueLoss.current_deficit_rate_kw || 0).toFixed(2)} kW
+                  </div>
+                )}
+              </div>
+            )}
             <GovernancePanel
               systemState={systemState}
               isSubmitting={isSubmittingFeedback}
