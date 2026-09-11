@@ -1,0 +1,139 @@
+{
+  "dataset_type": "wind",
+  "description": "Wind turbine telemetry for predictive maintenance",
+  "asset_label": "Wind Turbine",
+  "n_features": 12,
+  "fields": [
+    {
+      "index": 0,
+      "name": "vibration_x",
+      "label": "Vibration X-Axis",
+      "unit": "g",
+      "dtype": "float",
+      "category": "health",
+      "description": "Gearbox accelerometer reading along the X-axis"
+    },
+    {
+      "index": 1,
+      "name": "vibration_y",
+      "label": "Vibration Y-Axis",
+      "unit": "g",
+      "dtype": "float",
+      "category": "health",
+      "description": "Gearbox accelerometer reading along the Y-axis"
+    },
+    {
+      "index": 2,
+      "name": "vibration_z",
+      "label": "Vibration Z-Axis",
+      "unit": "g",
+      "dtype": "float",
+      "category": "health",
+      "description": "Gearbox accelerometer reading along the Z-axis"
+    },
+    {
+      "index": 3,
+      "name": "gearbox_oil_temperature",
+      "label": "Gearbox Oil Temp",
+      "unit": "°C",
+      "dtype": "float",
+      "category": "health",
+      "description": "Gearbox lubricant oil temperature"
+    },
+    {
+      "index": 4,
+      "name": "generator_temperature",
+      "label": "Generator Temp",
+      "unit": "°C",
+      "dtype": "float",
+      "category": "health",
+      "description": "Generator winding temperature"
+    },
+    {
+      "index": 5,
+      "name": "rotor_rpm",
+      "label": "Rotor RPM",
+      "unit": "RPM",
+      "dtype": "float",
+      "category": "health",
+      "description": "Rotor rotational speed"
+    },
+    {
+      "index": 6,
+      "name": "power_output",
+      "label": "Power Output",
+      "unit": "kW",
+      "dtype": "float",
+      "category": "health",
+      "description": "Electrical power output of the turbine"
+    },
+    {
+      "index": 7,
+      "name": "wind_speed",
+      "label": "Wind Speed",
+      "unit": "m/s",
+      "dtype": "float",
+      "category": "contextual",
+      "description": "Nacelle-mounted anemometer wind speed measurement"
+    },
+    {
+      "index": 8,
+      "name": "wind_direction",
+      "label": "Wind Direction",
+      "unit": "°",
+      "dtype": "float",
+      "category": "contextual",
+      "description": "Wind direction relative to nacelle orientation"
+    },
+    {
+      "index": 9,
+      "name": "ambient_temperature",
+      "label": "Ambient Temperature",
+      "unit": "°C",
+      "dtype": "float",
+      "category": "contextual",
+      "description": "Environmental air temperature at hub height"
+    },
+    {
+      "index": 10,
+      "name": "nacelle_vibration_rms",
+      "label": "Nacelle Vibration RMS",
+      "unit": "g",
+      "dtype": "float",
+      "category": "health",
+      "description": "Root-mean-square vibration of the nacelle structure"
+    },
+    {
+      "index": 11,
+      "name": "power_residual",
+      "label": "Power Residual",
+      "unit": "kW",
+      "dtype": "float",
+      "category": "derived",
+      "description": "Actual power minus expected power from the wind speed power curve model"
+    }
+  ],
+  "contextual_fields": ["wind_speed", "wind_direction", "ambient_temperature"],
+  "derived_fields": ["power_residual"],
+  "health_fields": ["vibration_x", "vibration_y", "vibration_z", "gearbox_oil_temperature", "generator_temperature", "rotor_rpm", "power_output", "nacelle_vibration_rms"],
+  "fault_types": [
+    {
+      "name": "gearbox_wear",
+      "description": "Gradual gearbox degradation causing oil temperature drift and vibration increase uncorrelated with load",
+      "affected_fields": ["gearbox_oil_temperature", "vibration_x", "vibration_y", "vibration_z", "nacelle_vibration_rms"],
+      "onset": "gradual"
+    },
+    {
+      "name": "bearing_fault",
+      "description": "Bearing defect producing periodic high-frequency vibration spikes independent of wind speed and RPM",
+      "affected_fields": ["vibration_x", "vibration_y", "vibration_z", "nacelle_vibration_rms"],
+      "onset": "intermittent"
+    },
+    {
+      "name": "yaw_misalignment",
+      "description": "Nacelle not tracking wind direction correctly, causing power output below the expected power curve without sensor faults",
+      "affected_fields": ["power_output", "power_residual", "wind_direction"],
+      "onset": "gradual"
+    }
+  ]
+}

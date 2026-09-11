@@ -1,0 +1,121 @@
+{
+  "dataset_type": "solar",
+  "description": "Solar panel array / inverter string telemetry for predictive maintenance",
+  "asset_label": "Solar Array",
+  "n_features": 10,
+  "fields": [
+    {
+      "index": 0,
+      "name": "dc_voltage",
+      "label": "DC Voltage",
+      "unit": "V",
+      "dtype": "float",
+      "category": "health",
+      "description": "DC output voltage of the panel string"
+    },
+    {
+      "index": 1,
+      "name": "dc_current",
+      "label": "DC Current",
+      "unit": "A",
+      "dtype": "float",
+      "category": "health",
+      "description": "DC output current of the panel string"
+    },
+    {
+      "index": 2,
+      "name": "ac_power_output",
+      "label": "AC Power Output",
+      "unit": "kW",
+      "dtype": "float",
+      "category": "health",
+      "description": "Inverter AC power output"
+    },
+    {
+      "index": 3,
+      "name": "module_temperature",
+      "label": "Module Temperature",
+      "unit": "°C",
+      "dtype": "float",
+      "category": "health",
+      "description": "Solar panel surface temperature"
+    },
+    {
+      "index": 4,
+      "name": "ambient_temperature",
+      "label": "Ambient Temperature",
+      "unit": "°C",
+      "dtype": "float",
+      "category": "contextual",
+      "description": "Environmental air temperature at the site"
+    },
+    {
+      "index": 5,
+      "name": "irradiance",
+      "label": "Solar Irradiance",
+      "unit": "W/m²",
+      "dtype": "float",
+      "category": "contextual",
+      "description": "Global horizontal irradiance measured at the array"
+    },
+    {
+      "index": 6,
+      "name": "soiling_index",
+      "label": "Soiling Index",
+      "unit": "0-1",
+      "dtype": "float",
+      "category": "health",
+      "description": "Estimated panel cleanliness ratio (1.0 = clean, 0.0 = fully soiled)"
+    },
+    {
+      "index": 7,
+      "name": "inverter_efficiency",
+      "label": "Inverter Efficiency",
+      "unit": "%",
+      "dtype": "float",
+      "category": "health",
+      "description": "DC-to-AC conversion efficiency of the inverter"
+    },
+    {
+      "index": 8,
+      "name": "power_residual",
+      "label": "Power Residual",
+      "unit": "kW",
+      "dtype": "float",
+      "category": "derived",
+      "description": "Actual AC power minus expected power from irradiance and temperature model"
+    },
+    {
+      "index": 9,
+      "name": "temperature_delta",
+      "label": "Temperature Delta",
+      "unit": "°C",
+      "dtype": "float",
+      "category": "derived",
+      "description": "Module temperature minus ambient temperature — elevated values indicate hotspots"
+    }
+  ],
+  "contextual_fields": ["ambient_temperature", "irradiance"],
+  "derived_fields": ["power_residual", "temperature_delta"],
+  "health_fields": ["dc_voltage", "dc_current", "ac_power_output", "module_temperature", "soiling_index", "inverter_efficiency"],
+  "fault_types": [
+    {
+      "name": "soiling",
+      "description": "Gradual power output decline from dust/debris accumulation on panel surface",
+      "affected_fields": ["soiling_index", "ac_power_output", "power_residual"],
+      "onset": "gradual"
+    },
+    {
+      "name": "hotspot",
+      "description": "Localized cell degradation causing temperature spike and power drop",
+      "affected_fields": ["module_temperature", "temperature_delta", "ac_power_output", "power_residual"],
+      "onset": "gradual"
+    },
+    {
+      "name": "inverter_fault",
+      "description": "Sudden inverter failure causing power output to drop to near-zero",
+      "affected_fields": ["ac_power_output", "inverter_efficiency", "dc_current"],
+      "onset": "sudden"
+    }
+  ]
+}

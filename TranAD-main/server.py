@@ -63,7 +63,7 @@ app.add_middleware(
 active_connections: list[WebSocket] = []
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 MODEL_NAME = 'STP_TranAD'
-DATASET = 'SMD'
+DATASET = 'synthetic'
 model = None
 optimizer = None
 ft_optimizer = None  # Separate low-LR optimizer for feedback-driven fine-tuning
