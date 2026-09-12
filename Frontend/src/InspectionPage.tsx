@@ -89,7 +89,12 @@ export default function InspectionPage({ onBack, activeDataset }: InspectionPage
   const [error, setError] = useState('');
   const [filterClass, setFilterClass] = useState('all');
   const [selectedFrame, setSelectedFrame] = useState<FrameResult | null>(null);
+  const [thermalFiles, setThermalFiles] = useState<File[]>([]);
+  const [thermalResults, setThermalResults] = useState<any>(null);
+  const [thermalUploading, setThermalUploading] = useState(false);
+  const [selectedThermal, setSelectedThermal] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const thermalInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -167,6 +172,27 @@ export default function InspectionPage({ onBack, activeDataset }: InspectionPage
       setError(e.message || 'Failed to start inspection');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleThermalUpload = async () => {
+    if (thermalFiles.length === 0) return;
+    setThermalUploading(true);
+    setThermalResults(null);
+    setSelectedThermal(null);
+    try {
+      const formData = new FormData();
+      thermalFiles.forEach(f => formData.append('files', f));
+      formData.append('asset_id', assetId);
+      formData.append('asset_type', assetType);
+      const res = await fetch(`${API}/api/inspection/thermal`, { method: 'POST', body: formData });
+      if (!res.ok) throw new Error('Thermal upload failed');
+      const data = await res.json();
+      setThermalResults(data);
+    } catch (e: any) {
+      setError(e.message || 'Thermal analysis failed');
+    } finally {
+      setThermalUploading(false);
     }
   };
 
@@ -562,9 +588,182 @@ export default function InspectionPage({ onBack, activeDataset }: InspectionPage
                 </div>
               )}
 
+              {/* ── Thermal Section ── */}
+              <div style={{
+                marginTop: 24, background: 'var(--bg-panel)', border: '1px solid var(--gold-border)',
+                borderRadius: 12, padding: 20, boxShadow: '0 2px 12px rgba(140, 100, 30, 0.06)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'linear-gradient(135deg, #ff4500, #ff8c00, #ffd700)' }} />
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, letterSpacing: '0.18em', color: TP }}>
+                    THERMAL IMAGERY
+                  </span>
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, color: TD, marginLeft: 'auto',
+                    padding: '2px 8px', background: `${CU}10`, border: `1px solid ${CU}30`, borderRadius: 12,
+                  }}>
+                    SUPPLEMENTARY
+                  </span>
+                </div>
+                <div style={{
+                  padding: '8px 12px', marginBottom: 14,
+                  background: `${CU}08`, border: `1px solid ${CU}20`, borderRadius: 6,
+                  fontFamily: 'var(--font-mono)', fontSize: 9, color: TS, lineHeight: 1.5,
+                }}>
+                  Upload false-color thermal images for hotspot detection. This uses color-thresholding on rendered thermal palettes — it does not extract temperature values.
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14 }}>
+                  <input
+                    ref={thermalInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={e => setThermalFiles(Array.from(e.target.files || []))}
+                  />
+                  <button
+                    onClick={() => thermalInputRef.current?.click()}
+                    style={{
+                      flex: 1, padding: '10px 14px', textAlign: 'left',
+                      background: 'var(--bg-recessed)', border: '1px solid var(--gold-border)', borderRadius: 6,
+                      fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'pointer',
+                      color: thermalFiles.length > 0 ? TP : TD,
+                    }}
+                  >
+                    {thermalFiles.length > 0 ? `${thermalFiles.length} thermal image(s) selected` : 'Select thermal images...'}
+                  </button>
+                  <button
+                    onClick={handleThermalUpload}
+                    disabled={thermalFiles.length === 0 || thermalUploading}
+                    style={{
+                      padding: '10px 20px', borderRadius: 6, border: 'none', cursor: thermalFiles.length === 0 ? 'not-allowed' : 'pointer',
+                      background: thermalFiles.length > 0 ? `linear-gradient(135deg, #ff6b35, ${CU})` : 'var(--bg-recessed)',
+                      fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+                      color: thermalFiles.length > 0 ? '#fff' : TD,
+                      opacity: thermalUploading ? 0.6 : 1,
+                    }}
+                  >
+                    {thermalUploading ? 'ANALYZING...' : 'DETECT HOTSPOTS'}
+                  </button>
+                </div>
+
+                {/* Thermal Results Grid */}
+                {thermalResults && (
+                  <>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: TP, fontWeight: 600 }}>
+                        {thermalResults.total_hotspots} hotspot(s) across {thermalResults.total_images} image(s)
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                      {thermalResults.results.map((tr: any) => (
+                        <button
+                          key={tr.index}
+                          onClick={() => setSelectedThermal(selectedThermal?.index === tr.index ? null : tr)}
+                          style={{
+                            background: selectedThermal?.index === tr.index ? 'rgba(255, 107, 53, 0.08)' : 'var(--bg-recessed)',
+                            border: `1px solid ${selectedThermal?.index === tr.index ? '#ff6b35' : 'var(--gold-border)'}`,
+                            borderRadius: 8, padding: 0, cursor: 'pointer', overflow: 'hidden', textAlign: 'left',
+                            transition: 'all 0.2s',
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(255, 107, 53, 0.15)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                        >
+                          <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', borderBottom: '1px solid var(--gold-border)', position: 'relative' }}>
+                            <img
+                              src={`${API}${tr.annotated_url || tr.original_url}`}
+                              alt={tr.filename}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                              onError={e => { (e.target as HTMLImageElement).src = `${API}${tr.original_url}`; }}
+                            />
+                            {tr.hotspot_count > 0 && (
+                              <div style={{
+                                position: 'absolute', top: 6, right: 6,
+                                padding: '2px 8px', borderRadius: 12,
+                                background: 'rgba(255, 69, 0, 0.85)', backdropFilter: 'blur(4px)',
+                                fontFamily: 'var(--font-display)', fontSize: 9, fontWeight: 700,
+                                color: '#fff', letterSpacing: '0.1em',
+                              }}>
+                                {tr.hotspot_count} HOT
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ padding: '6px 8px' }}>
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: TD, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {tr.filename}
+                            </div>
+                            {tr.hotspot_count > 0 && (
+                              <div style={{ display: 'flex', gap: 3, marginTop: 4, flexWrap: 'wrap' }}>
+                                {tr.detections.slice(0, 3).map((d: any, i: number) => (
+                                  <span key={i} style={{
+                                    fontFamily: 'var(--font-mono)', fontSize: 8,
+                                    color: d.class_name.includes('severe') ? '#ff4500' : d.class_name.includes('moderate') ? '#ff8c00' : '#ffa500',
+                                    padding: '1px 5px', borderRadius: 4,
+                                    background: d.class_name.includes('severe') ? 'rgba(255,69,0,0.12)' : 'rgba(255,140,0,0.10)',
+                                    border: `1px solid ${d.class_name.includes('severe') ? 'rgba(255,69,0,0.3)' : 'rgba(255,140,0,0.25)'}`,
+                                  }}>
+                                    {d.class_name.replace('hotspot_', '')} {(d.confidence * 100).toFixed(0)}%
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Selected thermal detail */}
+                    {selectedThermal && (
+                      <div style={{
+                        marginTop: 12, padding: 14, background: 'rgba(255, 107, 53, 0.04)',
+                        border: '1px solid rgba(255, 107, 53, 0.25)', borderRadius: 10,
+                      }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', color: TP, marginBottom: 8 }}>
+                          {selectedThermal.filename}
+                        </div>
+                        <img
+                          src={`${API}${selectedThermal.annotated_url || selectedThermal.original_url}`}
+                          alt="thermal detail"
+                          style={{ width: '100%', maxHeight: 400, objectFit: 'contain', borderRadius: 8, border: '1px solid var(--gold-border)', marginBottom: 8 }}
+                        />
+                        {selectedThermal.detections.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {selectedThermal.detections.map((d: any, i: number) => (
+                              <div key={i} style={{
+                                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px',
+                                background: d.class_name.includes('severe') ? 'rgba(255,69,0,0.08)' : 'rgba(255,140,0,0.06)',
+                                border: `1px solid ${d.class_name.includes('severe') ? 'rgba(255,69,0,0.2)' : 'rgba(255,140,0,0.18)'}`,
+                                borderRadius: 6,
+                              }}>
+                                <span style={{
+                                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, minWidth: 110,
+                                  color: d.class_name.includes('severe') ? '#ff4500' : d.class_name.includes('moderate') ? '#ff8c00' : '#ffa500',
+                                }}>
+                                  {d.class_name.replace('hotspot_', '').toUpperCase()}
+                                </span>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: TS }}>
+                                  {(d.confidence * 100).toFixed(0)}% confidence
+                                </span>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: TD, marginLeft: 'auto' }}>
+                                  {d.model_source}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: TL, fontStyle: 'italic' }}>
+                            No hotspots detected — image appears thermally uniform.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* New inspection button */}
               <button
-                onClick={() => { setJobId(null); setJobStatus(null); setResults(null); setFindings(null); setSelectedFrame(null); setError(''); }}
+                onClick={() => { setJobId(null); setJobStatus(null); setResults(null); setFindings(null); setSelectedFrame(null); setThermalResults(null); setThermalFiles([]); setSelectedThermal(null); setError(''); }}
                 style={{
                   marginTop: 20, padding: '10px 24px',
                   background: 'transparent', border: `1px solid ${G}`, borderRadius: 8, cursor: 'pointer',

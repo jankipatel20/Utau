@@ -3737,6 +3737,50 @@ async def start_inspection_file(
     asyncio.create_task(run_inspection_job(job_id, conf_thresh))
     return {"job_id": job_id, "status": "queued", "confidence_threshold": conf_thresh}
 
+@app.post("/api/inspection/thermal")
+async def upload_thermal_images(
+    files: list[UploadFile] = File(...),
+    asset_id: str = Form("solar_asset_00"),
+    asset_type: str = Form("solar"),
+):
+    from drone_inspection.inference.thermal_detector import run_thermal_detection, annotate_thermal
+    _thermal_dir = os.path.join(_SERVER_DIR, "drone_inspection", "thermal_results")
+    _upload_dir = os.path.join(_thermal_dir, "uploads")
+    _ann_dir = os.path.join(_thermal_dir, "annotated")
+    os.makedirs(_upload_dir, exist_ok=True)
+    os.makedirs(_ann_dir, exist_ok=True)
+    import uuid as _uuid
+    results = []
+    for i, f in enumerate(files):
+        ext = os.path.splitext(f.filename or "img.jpg")[1] or ".jpg"
+        uid = _uuid.uuid4().hex[:8]
+        save_name = f"{uid}_{f.filename}"
+        save_path = os.path.join(_upload_dir, save_name)
+        contents = await f.read()
+        with open(save_path, "wb") as fh:
+            fh.write(contents)
+        detections = await asyncio.to_thread(run_thermal_detection, save_path)
+        ann_name = f"ann_{save_name}"
+        ann_path = os.path.join(_ann_dir, ann_name)
+        if detections:
+            await asyncio.to_thread(annotate_thermal, save_path, detections, ann_path)
+        results.append({
+            "index": i,
+            "filename": f.filename,
+            "hotspot_count": len(detections),
+            "detections": [d.to_dict() for d in detections],
+            "annotated_url": f"/thermal-files/annotated/{ann_name}" if detections else None,
+            "original_url": f"/thermal-files/uploads/{save_name}",
+        })
+    total = sum(r["hotspot_count"] for r in results)
+    return {
+        "asset_id": asset_id,
+        "asset_type": asset_type,
+        "total_images": len(results),
+        "total_hotspots": total,
+        "results": results,
+    }
+
 @app.get("/api/inspection/status/{job_id}")
 async def inspection_status(job_id: str):
     status = get_job_status(job_id)
@@ -4104,6 +4148,9 @@ try:
     _inspection_jobs_dir = os.path.join(_SERVER_DIR, "drone_inspection", "jobs")
     os.makedirs(_inspection_jobs_dir, exist_ok=True)
     app.mount("/inspection-files", StaticFiles(directory=_inspection_jobs_dir), name="inspection-files")
+    _thermal_results_dir = os.path.join(_SERVER_DIR, "drone_inspection", "thermal_results")
+    os.makedirs(_thermal_results_dir, exist_ok=True)
+    app.mount("/thermal-files", StaticFiles(directory=_thermal_results_dir), name="thermal-files")
 except Exception:
     pass
 
