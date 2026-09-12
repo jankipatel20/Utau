@@ -1,1 +1,12 @@
 Extension/
+Frontend/node_modules/
+__pycache__/
+*.pyc
+
+# Drone Inspection Generated Media
+TranAD-main/drone_inspection/jobs/*
+!TranAD-main/drone_inspection/jobs/.gitkeep
+TranAD-main/drone_inspection/uploads/*
+!TranAD-main/drone_inspection/uploads/.gitkeep
+TranAD-main/drone_inspection/thermal_results/*
+!TranAD-main/drone_inspection/thermal_results/.gitkeep
