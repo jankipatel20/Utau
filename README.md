@@ -27,11 +27,15 @@
 <table>
   <tr>
     <td><img src="assets/dash1.png" alt="Dashboard 1"/></td>
-    <td><img src="assets/dash2.png" alt="Dashboard 2"/></td>
+    <td><img src="assets/solar.png" alt="Dashboard 2"/></td>
   </tr>
   <tr>
-    <td><img src="assets/dash3.png" alt="Dashboard 3"/></td>
-    <td><img src="assets/dash4.png" alt="Dashboard 4"/></td>
+    <td><img src="assets/bird_img.png" alt="Dashboard 3"/></td>
+    <td><img src="assets/thermal_img.png" alt="Dashboard 4"/></td>
+  </tr>
+  <tr>
+    <td><img src="assets/wind.png" alt="Dashboard 3"/></td>
+    <td><img src="assets/dash2.png" alt="Dashboard 4"/></td>
   </tr>
 </table>
 
