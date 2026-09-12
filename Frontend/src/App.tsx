@@ -429,9 +429,9 @@ const UI_UPDATE_INTERVAL_MS = 350;
 const MAX_CHART_POINTS = 30;
 
 const DATASET_TABS = [
-  { label: '☀  SOLAR ARRAY',  value: 'solar_synthetic' },
-  { label: '💨 WIND FARM',    value: 'wind_synthetic'  },
-  { label: 'GENERIC',         value: 'synthetic'       },
+  { label: 'SOLAR ARRAY',  value: 'solar_synthetic' },
+  { label: 'WIND FARM',    value: 'wind_synthetic'  },
+  { label: 'GENERIC',      value: 'synthetic'       },
 ];
 
 const featureFlag = (value: unknown, defaultValue = false): boolean => {
@@ -532,40 +532,189 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to fetch feedback history");
       const history = await res.json();
 
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      doc.setFontSize(22);
-      doc.setTextColor(40, 40, 40);
-      doc.text("UTAU Renewable Energy — Asset Health Report", 14, 22);
-      doc.setFontSize(11);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Active Dataset: ${activeDataset.toUpperCase()}`, 14, 30);
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 14, 36);
+      let aiInsight = "System is operating within expected parameters. Continue standard monitoring protocols.";
+      try {
+        const aiRes = await fetch('http://127.0.0.1:8000/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{
+              role: 'user', 
+              content: `Write a short 2-sentence executive summary for an industrial health report. The current system state is ${systemState}, active asset is ${activeDataset}, and there are ${history.length} historical events logged. Be highly professional and concise.`
+            }],
+            temperature: 0.3
+          })
+        });
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          if (aiData?.choices?.[0]?.message?.content) {
+            aiInsight = aiData.choices[0].message.content.trim();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch AI insight for PDF", e);
+      }
 
-      const tableColumn = ["ID", "Time", "Tick", "Dataset", "Anomaly Type", "Severity", "Confirmed", "Notes"];
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      
+      // --- 1. PREMIUM HEADER BAND ---
+      doc.setFillColor(10, 9, 7); // Dark Slate background
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      
+      // Draw UTAU Vector Logo (Diamond)
+      const logoX = 20;
+      const logoY = 20;
+      const logoR = 6;
+      doc.setDrawColor(184, 134, 42); // Gold
+      doc.setLineWidth(0.8);
+      doc.lines([[logoR, logoR], [-logoR, logoR], [-logoR, -logoR], [logoR, -logoR]], logoX, logoY - logoR);
+      doc.setFillColor(184, 134, 42);
+      const innerR = 2.5;
+      doc.lines([[innerR, innerR], [-innerR, innerR], [-innerR, -innerR], [innerR, -innerR]], logoX, logoY - innerR, [1, 1], 'F');
+
+      // Header Text
+      doc.setTextColor(240, 235, 224); // Cream text
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(22);
+      doc.text("UTAU", 38, 22);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(184, 134, 42); // Gold text
+      doc.text("EXECUTIVE HEALTH REPORT", 38, 28);
+      
+      doc.setTextColor(150, 150, 150);
+      doc.setFontSize(9);
+      doc.text(`DATE: ${new Date().toLocaleDateString()}`, pageWidth - 20, 22, { align: 'right' });
+      doc.text(`ASSET: ${activeDataset.toUpperCase()}`, pageWidth - 20, 28, { align: 'right' });
+
+      // --- 2. EXECUTIVE SUMMARY SECTION ---
+      let currentY = 50;
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(44, 30, 10);
+      doc.text("SYSTEM SNAPSHOT", 14, currentY);
+      currentY += 8;
+      
+      // Status Indicator Box
+      const stateColor = systemState === 'CRITICAL' ? [168, 50, 64] : systemState === 'WARNING' ? [160, 88, 26] : [184, 134, 42];
+      doc.setFillColor(stateColor[0], stateColor[1], stateColor[2]);
+      doc.rect(14, currentY, 4, 16, 'F');
+      doc.setFontSize(11);
+      doc.setTextColor(80, 60, 40);
+      doc.text("CURRENT STATE", 22, currentY + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(stateColor[0], stateColor[1], stateColor[2]);
+      doc.text(systemState, 22, currentY + 14);
+
+      // Financial Impact Box (if available)
+      if (revenueLoss) {
+        doc.setFillColor(184, 134, 42);
+        doc.rect(80, currentY, 4, 16, 'F');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(80, 60, 40);
+        doc.text("FINANCIAL IMPACT", 88, currentY + 6);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(44, 30, 10);
+        doc.text(revenueLoss.status_text || "NOMINAL", 88, currentY + 14);
+      }
+      
+      currentY += 24;
+
+      // --- NEW: AI EXECUTIVE SUMMARY ---
+      doc.setFillColor(28, 26, 23); // Dark slate
+      doc.rect(14, currentY, pageWidth - 28, 30, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(184, 134, 42); // Gold
+      doc.text("GROQ AI EXECUTIVE INSIGHT", 20, currentY + 8);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(240, 235, 224); // Cream
+      const insightLines = doc.splitTextToSize(aiInsight, pageWidth - 40);
+      doc.text(insightLines, 20, currentY + 16);
+      
+      currentY += 40;
+
+      // --- 3. ACTIVE ANOMALY INTELLIGENCE ---
+      if (systemState !== 'HEALTHY' && alertExplanation) {
+        doc.setFillColor(244, 237, 216); // Light cream background
+        doc.rect(14, currentY, pageWidth - 28, 40, 'F');
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(168, 50, 64);
+        doc.text("AI COPILOT: ACTIVE THREAT ANALYSIS", 20, currentY + 10);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(44, 30, 10);
+        const topSensor = alertExplanation.top_contributors?.[0]?.sensor || 'Unknown';
+        doc.text(`Primary Contributor: ${topSensor}`, 20, currentY + 18);
+        
+        const hints = doc.splitTextToSize(alertExplanation.investigation_hints?.join(" ") || "No hints available.", pageWidth - 40);
+        doc.text(hints, 20, currentY + 26);
+        
+        currentY += 52;
+      }
+
+      // --- 4. HISTORICAL TELEMETRY AUDIT ---
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(44, 30, 10);
+      doc.text("HISTORICAL TELEMETRY AUDIT", 14, currentY);
+      
+      const tableColumn = ["Time", "Tick", "Type", "Severity", "Confirmed", "Notes"];
       const tableRows = history.map((item: any) => [
-        item.id,
-        new Date(item.created_at_ms).toLocaleString(),
+        new Date(item.created_at_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         item.tick || 'N/A',
-        item.dataset,
-        item.anomaly_type || 'Unknown Error',
-        item.severity_level || 'N/A',
-        item.was_anomaly ? 'Yes' : 'No',
-        item.note || '',
+        (item.anomaly_type || 'Unknown').replace(/_/g, ' ').toUpperCase(),
+        (item.severity_level || 'N/A').toUpperCase(),
+        item.was_anomaly ? 'YES' : 'NO',
+        item.note || '--',
       ]);
 
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
-        startY: 45,
+        startY: currentY + 6,
         theme: 'grid',
-        headStyles: { fillColor: [184, 134, 42], textColor: [255, 255, 255] },
+        headStyles: { fillColor: [184, 134, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
         alternateRowStyles: { fillColor: [248, 245, 240] },
-        styles: { fontSize: 9, cellPadding: 3, font: 'helvetica' },
+        styles: { fontSize: 9, cellPadding: 4, font: 'helvetica', textColor: [60, 50, 40] },
+        columnStyles: {
+          3: { fontStyle: 'bold' } // Severity column
+        },
+        willDrawCell: function (data: any) {
+          // Color code severity in the table
+          if (data.section === 'body' && data.column.index === 3) {
+            if (data.cell.raw === 'CRITICAL') {
+              doc.setTextColor(168, 50, 64);
+            } else if (data.cell.raw === 'WARNING') {
+              doc.setTextColor(160, 88, 26);
+            } else {
+              doc.setTextColor(184, 134, 42);
+            }
+          }
+        },
       });
 
-      doc.save(`UTAU_Threat_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
+      // --- 5. FOOTER ---
+      const pageCount = doc.getNumberOfPages();
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.text(`Generated by UTAU Advanced Telemetry & AI Copilot  •  Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      }
+
+      doc.save(`UTAU_Executive_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (err) {
-      console.error("Failed to generate PDF Data Report", err);
+      console.error("Failed to generate Premium PDF Data Report", err);
     }
   };
 
@@ -923,7 +1072,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Header */}
-      <div style={{ height: 56, flexShrink: 0 }} className="hud-header">
+      <div style={{ height: 72, flexShrink: 0, position: 'relative', zIndex: 100 }} className="hud-header">
         <UtauHeader
           state={systemState} isConnected={isConnected && !isTransitioning}
           tabs={DATASET_TABS} activeDataset={activeDataset} isTransitioning={isTransitioning}
@@ -1014,9 +1163,9 @@ export default function App() {
                   onClick={() => setActiveLeftTab('diagnostics')}
                   style={{
                     flex: 1, padding: '10px 0', border: '1px solid', borderRadius: 4, cursor: 'pointer',
-                    background: activeLeftTab === 'diagnostics' ? 'rgba(212,168,83,0.15)' : 'rgba(10,9,7,0.6)',
-                    borderColor: activeLeftTab === 'diagnostics' ? 'rgba(212,168,83,0.5)' : 'rgba(184,134,42,0.2)',
-                    color: activeLeftTab === 'diagnostics' ? 'var(--gold)' : 'var(--text-dim)',
+                    background: activeLeftTab === 'diagnostics' ? 'var(--gold-dim)' : 'transparent',
+                    borderColor: activeLeftTab === 'diagnostics' ? 'var(--gold)' : 'var(--border)',
+                    color: activeLeftTab === 'diagnostics' ? 'var(--text-primary)' : 'var(--text-dim)',
                     fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
                     transition: 'all 0.2s ease', backdropFilter: 'blur(10px)'
                   }}
@@ -1027,9 +1176,9 @@ export default function App() {
                   onClick={() => setActiveLeftTab('residuals')}
                   style={{
                     flex: 1, padding: '10px 0', border: '1px solid', borderRadius: 4, cursor: 'pointer',
-                    background: activeLeftTab === 'residuals' ? 'rgba(212,168,83,0.15)' : 'rgba(10,9,7,0.6)',
-                    borderColor: activeLeftTab === 'residuals' ? 'rgba(212,168,83,0.5)' : 'rgba(184,134,42,0.2)',
-                    color: activeLeftTab === 'residuals' ? 'var(--gold)' : 'var(--text-dim)',
+                    background: activeLeftTab === 'residuals' ? 'var(--gold-dim)' : 'transparent',
+                    borderColor: activeLeftTab === 'residuals' ? 'var(--gold)' : 'var(--border)',
+                    color: activeLeftTab === 'residuals' ? 'var(--text-primary)' : 'var(--text-dim)',
                     fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
                     transition: 'all 0.2s ease', backdropFilter: 'blur(10px)'
                   }}

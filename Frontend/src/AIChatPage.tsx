@@ -136,18 +136,17 @@ ${dbBlock}
     setIsLoading(true);
 
     try {
-      const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+
       const systemMessage = { role: 'system', content: buildSystemPrompt() };
       const apiHistory = messages.map(m => ({ role: m.role, content: m.content }));
 
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const res = await fetch('http://127.0.0.1:8000/api/chat', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'openai/gpt-oss-120b',
           messages: [systemMessage, ...apiHistory, { role: 'user', content: userMsg }],
           temperature: 0.15,
         })
@@ -296,9 +295,9 @@ ${dbBlock}
                           ol: ({ node, ...props }) => <ol style={{ paddingLeft: 20, margin: '10px 0' }} {...props} />,
                           li: ({ node, ...props }) => <li style={{ marginBottom: 5, color: 'var(--text)' }} {...props} />,
                           p: ({ node, ...props }) => <p style={{ margin: '0 0 10px 0', lineHeight: 1.7 }} {...props} />,
-                          code: ({ node, ...props }) => <code style={{ background: 'rgba(201,146,42,0.12)', padding: '1px 5px', borderRadius: 2, color: '#E8B84B', fontSize: 12 }} {...props} />,
+                          code: ({ node, ...props }) => <code style={{ background: 'rgba(201,146,42,0.12)', padding: '1px 5px', borderRadius: 2, color: 'var(--gold)', fontSize: 12 }} {...props} />,
                           h1: ({ node, ...props }) => <h1 style={{ fontSize: 15, color: 'var(--gold)', margin: '16px 0 8px', borderBottom: '1px solid var(--border)', paddingBottom: 6, letterSpacing: '0.1em' }} {...props} />,
-                          h2: ({ node, ...props }) => <h2 style={{ fontSize: 13, color: '#F0EBE0', margin: '14px 0 6px', letterSpacing: '0.08em' }} {...props} />,
+                          h2: ({ node, ...props }) => <h2 style={{ fontSize: 13, color: 'var(--text)', margin: '14px 0 6px', letterSpacing: '0.08em' }} {...props} />,
                           h3: ({ node, ...props }) => <h3 style={{ fontSize: 12, color: 'var(--text-muted)', margin: '10px 0 4px', letterSpacing: '0.06em' }} {...props} />,
                           blockquote: ({ node, ...props }) => <blockquote style={{ borderLeft: '2px solid var(--gold)', paddingLeft: 12, margin: '8px 0', color: 'var(--text-muted)', fontStyle: 'italic' }} {...props} />,
                           hr: ({ node, ...props }) => <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '12px 0' }} {...props} />,

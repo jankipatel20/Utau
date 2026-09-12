@@ -77,6 +77,7 @@ MODEL_NAME = 'STP_TranAD'
 DATASET = 'synthetic'
 model = None
 optimizer = None
+feats_dim = 0
 ft_optimizer = None  # Separate low-LR optimizer for feedback-driven fine-tuning
 # Keep one extra frame so we can forecast current from previous model.n_window points.
 live_buffer = deque(maxlen=101)
@@ -127,7 +128,7 @@ SOP_OPENAI_API_KEY = os.getenv("SOP_OPENAI_API_KEY", os.getenv("OPENAI_API_KEY",
 SOP_OPENAI_MODEL = os.getenv("SOP_OPENAI_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini")).strip()
 SOP_OPENAI_ENDPOINT = os.getenv("SOP_OPENAI_ENDPOINT", "https://api.openai.com/v1/chat/completions").strip()
 SOP_GROQ_API_KEY = os.getenv("SOP_GROQ_API_KEY", os.getenv("GROQ_API_KEY", os.getenv("VITE_GROQ_API_KEY", ""))).strip()
-SOP_GROQ_MODEL = os.getenv("SOP_GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+SOP_GROQ_MODEL = os.getenv("SOP_GROQ_MODEL", "openai/gpt-oss-120b").strip()
 SOP_GROQ_ENDPOINT = os.getenv("SOP_GROQ_ENDPOINT", "https://api.groq.com/openai/v1/chat/completions").strip()
 SOP_LLM_TIMEOUT_SEC = float(os.getenv("SOP_LLM_TIMEOUT_SEC", "20"))
 SOP_HISTORY_PATH = os.getenv("SOP_HISTORY_PATH", os.path.join(_SERVER_DIR, "results", "sop_history.ndjson"))
@@ -507,6 +508,11 @@ class SOPRequest(BaseModel):
     max_steps: int = 8
     force_llm: bool = False
     model: Optional[str] = None
+
+class ChatRequest(BaseModel):
+    messages: list[dict]
+    model: Optional[str] = None
+    temperature: float = 0.15
 
 def _now_ms() -> int:
     return int(time.time() * 1000)
@@ -2244,7 +2250,7 @@ def _generate_sop_with_llm(event: dict[str, Any], request: SOPRequest) -> str:
         raise RuntimeError(f"{provider}_api_key_not_configured")
 
     if provider == "groq":
-        default_model = SOP_GROQ_MODEL or "llama-3.3-70b-versatile"
+        default_model = SOP_GROQ_MODEL or "openai/gpt-oss-120b"
     else:
         default_model = SOP_OPENAI_MODEL or "gpt-4o-mini"
 
@@ -2269,6 +2275,7 @@ def _generate_sop_with_llm(event: dict[str, Any], request: SOPRequest) -> str:
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
         method="POST",
     )
@@ -3029,6 +3036,39 @@ async def get_anomaly_source(anomaly_id: int):
     if event is None:
         raise HTTPException(status_code=404, detail="anomaly_not_found")
     return _build_anomaly_source_payload(event)
+
+@app.post("/api/chat")
+async def chat_proxy(payload: ChatRequest):
+    provider, api_key, endpoint = _sop_llm_config()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="llm_not_configured")
+
+    model = payload.model or (SOP_GROQ_MODEL if provider == "groq" else SOP_OPENAI_MODEL)
+    request_body = {
+        "model": model,
+        "messages": payload.messages,
+        "temperature": payload.temperature,
+    }
+
+    try:
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(request_body).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            },
+            method="POST",
+        )
+        def _fetch():
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return response.read().decode("utf-8")
+        body = await asyncio.to_thread(_fetch)
+        parsed = json.loads(body)
+        return parsed
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @app.post("/anomalies/{anomaly_id}/sop")
 async def generate_anomaly_sop(anomaly_id: int, payload: SOPRequest):
