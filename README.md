@@ -38,6 +38,9 @@
 ### AI Copilot & SOP Generator
 ![AI Copilot](assets/chat.png)
 
+### WhatsApp Agent
+![Whatsapp_agent](assets/whatsapp_agent.png)
+
 ### SOTA Benchmark Performance
 ![Benchmark Scores](assets/scores.png)
 
@@ -164,32 +167,7 @@ Evaluated on 6 real-world solar and wind datasets. UTAU outperforms all baseline
 
 ## 🔄 Full System Flow
 
-```
-[Solar Panel / Wind Turbine / ESP32 / RGB Camera]
-              ↓ MQTT / HTTP
-       [Mosquitto / Direct Ingest]
-              ↓ Kafka Producer
-    [Kafka topic: telemetry-stream]
-              ↓ Kafka Consumer
-   [STP-TranAD — Self-Adapting Inference]
-     ↓ fused score   ↓ RGB analysis
-     ↓ revenue loss  ↓ fleet priority rank
-              ↓
-   ┌──────────┼──────────┐
-   ↓          ↓          ↓
-Dashboard  WhatsApp   PDF Report
-   ↓          ↓
-LLM SOP   Alerts +
-Generator  Q&A Agent
-   ↓
-Operator Feedback (confirm / dismiss)
-   ↓
-RL Policy → Updated Per-Asset Threshold
-   ↓
-Smarter inference next cycle
-```
-
----
+![System Architecture](assets/sys_flow.jpg)
 
 ## ⚙️ Installation & Setup
 
