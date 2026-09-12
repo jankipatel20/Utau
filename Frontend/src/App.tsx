@@ -532,6 +532,29 @@ export default function App() {
       if (!res.ok) throw new Error("Failed to fetch feedback history");
       const history = await res.json();
 
+      let aiInsight = "System is operating within expected parameters. Continue standard monitoring protocols.";
+      try {
+        const aiRes = await fetch('http://127.0.0.1:8000/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{
+              role: 'user', 
+              content: `Write a short 2-sentence executive summary for an industrial health report. The current system state is ${systemState}, active asset is ${activeDataset}, and there are ${history.length} historical events logged. Be highly professional and concise.`
+            }],
+            temperature: 0.3
+          })
+        });
+        if (aiRes.ok) {
+          const aiData = await aiRes.json();
+          if (aiData?.choices?.[0]?.message?.content) {
+            aiInsight = aiData.choices[0].message.content.trim();
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to fetch AI insight for PDF", e);
+      }
+
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageWidth = doc.internal.pageSize.getWidth();
       
@@ -598,7 +621,24 @@ export default function App() {
         doc.text(revenueLoss.status_text || "NOMINAL", 88, currentY + 14);
       }
       
-      currentY += 28;
+      currentY += 24;
+
+      // --- NEW: AI EXECUTIVE SUMMARY ---
+      doc.setFillColor(28, 26, 23); // Dark slate
+      doc.rect(14, currentY, pageWidth - 28, 30, 'F');
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(184, 134, 42); // Gold
+      doc.text("GROQ AI EXECUTIVE INSIGHT", 20, currentY + 8);
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.setTextColor(240, 235, 224); // Cream
+      const insightLines = doc.splitTextToSize(aiInsight, pageWidth - 40);
+      doc.text(insightLines, 20, currentY + 16);
+      
+      currentY += 40;
 
       // --- 3. ACTIVE ANOMALY INTELLIGENCE ---
       if (systemState !== 'HEALTHY' && alertExplanation) {
