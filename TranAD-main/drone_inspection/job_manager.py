@@ -190,6 +190,17 @@ async def run_inspection_job(job_id: str, confidence_threshold: float = 0.25):
         job["progress_detail"] = f"Complete — {total_dets} defect(s) found in {len(frames)} frames"
         job["completed_at"] = time.time()
 
+        try:
+            from drone_inspection.findings_store import record_inspection
+            record_inspection(
+                asset_id=job["asset_id"],
+                asset_type=job["asset_type"],
+                job_id=job_id,
+                results=clean_results,
+            )
+        except Exception as rec_err:
+            print(f"[INSPECTION JOB {job_id}] findings_store.record failed: {rec_err}")
+
     except Exception as e:
         job["status"] = "failed"
         job["error"] = str(e)

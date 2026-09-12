@@ -47,6 +47,13 @@ from revenue_loss import RevenueLossTracker
 from drone_inspection.job_manager import (
     create_job, get_job_status, get_job_results, list_jobs, run_inspection_job,
 )
+from drone_inspection.findings_store import (
+    get_findings as get_inspection_findings,
+    get_all_findings as get_all_inspection_findings,
+    has_visual_defects,
+    get_derating_for_asset,
+    get_defect_summary_text,
+)
 
 app = FastAPI(title="STP-TranAD Streaming Inference Engine")
 
@@ -300,7 +307,13 @@ def _update_fleet_state(
         rev_rate = loss.get("current_deficit_rate_kw", 0.0)
         score_norm = min(1.0, st["anomaly_score"] / max(threshold * 2, 0.01))
         rev_norm = min(1.0, rev_rate / 100.0)
-        st["priority_score"] = round(0.5 * score_norm + 0.5 * rev_norm, 4)
+        visual_boost = 0.15 if has_visual_defects(aid) else 0.0
+        st["has_visual_defects"] = has_visual_defects(aid)
+        st["visual_derating_pct"] = get_derating_for_asset(aid)
+        st["priority_score"] = round(
+            min(1.0, 0.4 * score_norm + 0.4 * rev_norm + 0.2 * (1.0 if visual_boost > 0 else 0.0) + visual_boost * 0.5),
+            4,
+        )
         if st["is_anomalous"] and dataset in {"solar_synthetic", "wind_synthetic"}:
             actual_kw, expected_kw = RevenueLossTracker.extract_power_fields(dataset, [0.5] * 20)
             if i > 0:
@@ -315,7 +328,16 @@ def _get_fleet_summary() -> dict:
     assets = []
     for aid, st in fleet_state.items():
         loss = revenue_tracker.get_asset_summary(aid)
-        assets.append({**st, "revenue_loss": loss})
+        inspection = get_inspection_findings(aid)
+        entry = {**st, "revenue_loss": loss}
+        if inspection:
+            entry["inspection"] = {
+                "job_id": inspection["job_id"],
+                "total_defects": inspection["total_confirmed_defects"],
+                "derating_pct": inspection["estimated_derating_pct"],
+                "class_counts": inspection["class_counts"],
+            }
+        assets.append(entry)
     assets.sort(key=lambda a: a.get("priority_score", 0), reverse=True)
     total_loss = sum(a["revenue_loss"].get("cumulative_revenue_loss_usd", 0) for a in assets)
     return {
@@ -2121,11 +2143,28 @@ def _build_domain_context(dataset: str) -> str:
     if rev.get("total_energy_loss_kwh", 0) > 0:
         rev_line = f"\nCurrent estimated revenue loss: ${rev['total_revenue_loss_usd']:.2f} ({rev['total_energy_loss_kwh']:.4f} kWh lost)."
 
+    inspection_block = ""
+    all_findings = get_all_inspection_findings()
+    if all_findings:
+        parts = []
+        for aid, f in all_findings.items():
+            summary = get_defect_summary_text(aid)
+            if summary:
+                parts.append(f"  - {aid}: {summary}")
+        if parts:
+            inspection_block = (
+                "\nDRONE INSPECTION FINDINGS (RGB-visible defects — not thermal):\n"
+                + "\n".join(parts)
+                + "\nWhen sensor anomalies AND visual defects are present for the same asset, "
+                "explicitly note this corroboration — it is the strongest evidence. "
+                "When only one signal is present, hedge more heavily."
+            )
+
     return f"""
 DOMAIN: {domain.upper()} PREDICTIVE MAINTENANCE ({asset_label})
 Sensor fields: {field_desc}
 Known fault patterns for {domain}: {fault_desc}
-IMPORTANT: Root-cause attribution is inherently uncertain. Use hedged language like "this pattern is consistent with" or "likely indicates" rather than definitive claims like "this is caused by". Weather and environmental confounds (irradiance, wind speed, temperature) can produce signatures similar to real faults.{rev_line}
+IMPORTANT: Root-cause attribution is inherently uncertain. Use hedged language like "this pattern is consistent with" or "likely indicates" rather than definitive claims like "this is caused by". Weather and environmental confounds (irradiance, wind speed, temperature) can produce signatures similar to real faults.{rev_line}{inspection_block}
 """
 
 def _fallback_sop(event: dict[str, Any], request: SOPRequest) -> str:
@@ -2748,6 +2787,14 @@ async def get_fleet_summary():
 async def get_domain_context():
     schema = _load_domain_schema(DATASET)
     rev = revenue_tracker.get_aggregate()
+    all_findings = get_all_inspection_findings()
+    inspection_summary = {}
+    for aid, f in all_findings.items():
+        inspection_summary[aid] = {
+            "total_defects": f["total_confirmed_defects"],
+            "derating_pct": f["estimated_derating_pct"],
+            "class_counts": f["class_counts"],
+        }
     return {
         "dataset": DATASET,
         "domain": schema.get("dataset_type", "generic") if schema else "generic",
@@ -2755,6 +2802,7 @@ async def get_domain_context():
         "fields": [{"name": f["name"], "label": f["label"], "unit": f["unit"], "category": f["category"]} for f in schema.get("fields", [])] if schema else [],
         "fault_types": [{"name": ft["name"], "description": ft["description"]} for ft in schema.get("fault_types", [])] if schema else [],
         "revenue_loss": rev,
+        "inspection_findings": inspection_summary,
     }
 
 @app.get("/sources")
@@ -3081,6 +3129,8 @@ async def trigger_dataset_swap(req: SwapRequest):
         feats_dim = new_feats
         _reset_ingestion_state(feats_dim)
         revenue_tracker.reset()
+        from drone_inspection.findings_store import clear as clear_inspection_findings
+        clear_inspection_findings()
         _init_fleet_state(DATASET)
 
         # Flush baseline frames to buffer
@@ -3654,9 +3704,13 @@ async def start_inspection(payload: InspectionUploadPayload):
         return {"error": "source_value or youtube_url required"}
     if payload.asset_type not in {"solar", "wind"}:
         return {"error": "asset_type must be 'solar' or 'wind'"}
+    from drone_inspection.confidence_config import get_confidence_threshold
+    conf_thresh = payload.confidence_threshold
+    if conf_thresh <= 0.25:
+        conf_thresh = get_confidence_threshold(payload.asset_type)
     job_id = create_job(payload.asset_id, payload.asset_type, source_type, source_value)
-    asyncio.create_task(run_inspection_job(job_id, payload.confidence_threshold))
-    return {"job_id": job_id, "status": "queued"}
+    asyncio.create_task(run_inspection_job(job_id, conf_thresh))
+    return {"job_id": job_id, "status": "queued", "confidence_threshold": conf_thresh}
 
 @app.get("/api/inspection/status/{job_id}")
 async def inspection_status(job_id: str):
@@ -3675,6 +3729,39 @@ async def inspection_results(job_id: str):
 @app.get("/api/inspection/jobs")
 async def inspection_jobs(limit: int = Query(default=20, ge=1, le=100)):
     return {"jobs": list_jobs(limit)}
+
+@app.get("/api/inspection/findings")
+async def inspection_findings_all():
+    all_f = get_all_inspection_findings()
+    return {
+        "total_assets_with_findings": len(all_f),
+        "findings": {
+            aid: {
+                "total_defects": f["total_confirmed_defects"],
+                "derating_pct": f["estimated_derating_pct"],
+                "class_counts": f["class_counts"],
+                "job_id": f["job_id"],
+                "confidence_threshold": f["confidence_threshold_used"],
+            }
+            for aid, f in all_f.items()
+        },
+    }
+
+@app.get("/api/inspection/findings/{asset_id}")
+async def inspection_findings_asset(asset_id: str):
+    f = get_inspection_findings(asset_id)
+    if f is None:
+        return {"asset_id": asset_id, "found": False}
+    return {
+        "asset_id": asset_id,
+        "found": True,
+        "total_defects": f["total_confirmed_defects"],
+        "derating_pct": f["estimated_derating_pct"],
+        "class_counts": f["class_counts"],
+        "job_id": f["job_id"],
+        "confidence_threshold": f["confidence_threshold_used"],
+        "defect_summary": get_defect_summary_text(asset_id),
+    }
 
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
