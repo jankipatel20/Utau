@@ -44,6 +44,9 @@ except ImportError:
 from src.models import STP_TranAD
 from src.rl_policy_manager import RLPolicyManager
 from revenue_loss import RevenueLossTracker
+from drone_inspection.job_manager import (
+    create_job, get_job_status, get_job_results, list_jobs, run_inspection_job,
+)
 
 app = FastAPI(title="STP-TranAD Streaming Inference Engine")
 
@@ -3630,6 +3633,49 @@ async def retrain_mark_applied(payload: RetrainAppliedPayload):
         "note": payload.note,
     }
 
+class InspectionUploadPayload(BaseModel):
+    asset_id: str
+    asset_type: str = "solar"
+    source_type: str = "file"
+    source_value: str = ""
+    youtube_url: Optional[str] = None
+    confidence_threshold: float = 0.25
+
+@app.post("/api/inspection/upload")
+async def start_inspection(payload: InspectionUploadPayload):
+    source_type = payload.source_type
+    source_value = payload.source_value
+    if payload.youtube_url:
+        source_type = "youtube"
+        source_value = payload.youtube_url
+    if source_type not in {"file", "youtube"}:
+        return {"error": "source_type must be 'file' or 'youtube'"}
+    if not source_value:
+        return {"error": "source_value or youtube_url required"}
+    if payload.asset_type not in {"solar", "wind"}:
+        return {"error": "asset_type must be 'solar' or 'wind'"}
+    job_id = create_job(payload.asset_id, payload.asset_type, source_type, source_value)
+    asyncio.create_task(run_inspection_job(job_id, payload.confidence_threshold))
+    return {"job_id": job_id, "status": "queued"}
+
+@app.get("/api/inspection/status/{job_id}")
+async def inspection_status(job_id: str):
+    status = get_job_status(job_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return status
+
+@app.get("/api/inspection/results/{job_id}")
+async def inspection_results(job_id: str):
+    results = get_job_results(job_id)
+    if results is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return results
+
+@app.get("/api/inspection/jobs")
+async def inspection_jobs(limit: int = Query(default=20, ge=1, le=100)):
+    return {"jobs": list_jobs(limit)}
+
 @app.websocket("/ws/stream")
 async def websocket_endpoint(websocket: WebSocket):
     global anomaly_streak
@@ -3940,6 +3986,14 @@ async def whatsapp_status():
 @app.get("/")
 def read_root():
     return {"status": "STP-TranAD Engine is running", "ready": model is not None}
+
+try:
+    from fastapi.staticfiles import StaticFiles
+    _inspection_jobs_dir = os.path.join(_SERVER_DIR, "drone_inspection", "jobs")
+    os.makedirs(_inspection_jobs_dir, exist_ok=True)
+    app.mount("/inspection-files", StaticFiles(directory=_inspection_jobs_dir), name="inspection-files")
+except Exception:
+    pass
 
 if __name__ == "__main__":
     import uvicorn
