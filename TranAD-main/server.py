@@ -4183,6 +4183,224 @@ async def whatsapp_status():
 def read_root():
     return {"status": "STP-TranAD Engine is running", "ready": model is not None}
 
+# ── WhatsApp AI Agent & Automated Inspection Webhook ────────────────────────
+import httpx
+import uuid
+from fastapi import Request, BackgroundTasks, Form
+from fastapi.responses import Response
+from drone_inspection.inference.thermal_detector import run_thermal_detection, annotate_thermal
+
+PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
+_whatsapp_sessions = {}
+
+async def process_whatsapp_media(media_url: str, content_type: str, from_number: str):
+    if not PUBLIC_URL:
+        print("[TWILIO WEBHOOK] WARNING: PUBLIC_URL not set in .env. Cannot reply with images.")
+        
+    try:
+        # Download the media from Twilio
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                media_url, 
+                follow_redirects=True,
+                auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+            )
+            if resp.status_code != 200:
+                print(f"[TWILIO WEBHOOK] Failed to download media: {resp.status_code}")
+                return
+            
+            tmp_id = str(uuid.uuid4())[:8]
+            is_video = content_type.startswith("video/")
+            
+            from twilio.rest import Client
+            twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+
+            if is_video:
+                # Tell user we are processing video (takes time)
+                twilio_client.messages.create(from_=TWILIO_FROM_WHATSAPP, to=from_number, body="⏳ Received video! Starting automated drone inspection... this may take a minute.")
+                
+                _upload_dir = os.path.join(_SERVER_DIR, "drone_inspection", "uploads")
+                os.makedirs(_upload_dir, exist_ok=True)
+                in_path = os.path.join(_upload_dir, f"wa_vid_{tmp_id}.mp4")
+                with open(in_path, "wb") as f:
+                    f.write(resp.content)
+                
+                from drone_inspection.job_manager import create_job, run_inspection_job, get_job_results
+                from drone_inspection.confidence_config import get_confidence_threshold
+                
+                # Default to solar for whatsapp scans
+                job_id = create_job("wa_asset", "solar", "file", in_path)
+                conf_thresh = get_confidence_threshold("solar")
+                await run_inspection_job(job_id, conf_thresh)
+                
+                results = get_job_results(job_id)
+                if not results or not results.get("results"):
+                    twilio_client.messages.create(from_=TWILIO_FROM_WHATSAPP, to=from_number, body="✅ *Inspection Complete*\n\nNo significant defects found in the video.")
+                    return
+                
+                # Find the frame with the most detections
+                frames_with_dets = [r for r in results["results"] if r.get("detection_count", 0) > 0 and r.get("annotated_file")]
+                if frames_with_dets:
+                    best_frame = max(frames_with_dets, key=lambda x: x["detection_count"])
+                    msg = f"📸 *Automated Drone Inspection Complete*\n\nFound {results['total_detections']} defects across the video. Here is the most critical frame:"
+                    media_reply_url = f"{PUBLIC_URL}/inspection-files/{job_id}/annotated/{best_frame['annotated_file']}"
+                    twilio_client.messages.create(from_=TWILIO_FROM_WHATSAPP, to=from_number, body=msg, media_url=[media_reply_url])
+                else:
+                    twilio_client.messages.create(from_=TWILIO_FROM_WHATSAPP, to=from_number, body="✅ *Inspection Complete*\n\nNo significant defects found in the video.")
+                return
+
+            else:
+                # IMAGE PROCESSING
+                _thermal_results_dir = os.path.join(_SERVER_DIR, "drone_inspection", "thermal_results")
+                os.makedirs(_thermal_results_dir, exist_ok=True)
+                in_path = os.path.join(_thermal_results_dir, f"wa_in_{tmp_id}.jpg")
+                out_path = os.path.join(_thermal_results_dir, f"wa_out_{tmp_id}.jpg")
+                
+                with open(in_path, "wb") as f:
+                    f.write(resp.content)
+                    
+                # Run detection and annotation
+                detections = run_thermal_detection(in_path)
+                annotate_thermal(in_path, detections, out_path)
+                
+                severe_count = sum(1 for d in detections if "severe" in d.class_name)
+                message_body = f"📸 *Automated Thermal Scan Complete*\n\nFound {len(detections)} hotspots ({severe_count} severe)."
+                if not detections:
+                    message_body = "✅ *Automated Thermal Scan Complete*\n\nNo significant thermal anomalies detected."
+                    
+                kwargs = {"from_": TWILIO_FROM_WHATSAPP, "to": from_number, "body": message_body}
+                if PUBLIC_URL and detections:
+                    kwargs["media_url"] = [f"{PUBLIC_URL}/thermal-files/wa_out_{tmp_id}.jpg"]
+                    
+                twilio_client.messages.create(**kwargs)
+        
+    except Exception as e:
+        print(f"[TWILIO WEBHOOK] Error processing media: {e}")
+
+async def process_whatsapp_text(body: str, from_number: str):
+    try:
+        from twilio.rest import Client
+        twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        
+        # Get or create session
+        global source_registry
+        system_has_sensors = len(source_registry.get("items", [])) > 0
+        session = _whatsapp_sessions.setdefault(from_number, {"sensors_connected": system_has_sensors, "state": "default"})
+        if system_has_sensors:
+            session["sensors_connected"] = True
+        
+        
+        provider, api_key, endpoint = _sop_llm_config()
+        if not api_key:
+            twilio_client.messages.create(from_=TWILIO_FROM_WHATSAPP, to=from_number, body="⚠️ AI Copilot is offline (API key missing).")
+            return
+            
+        model = SOP_GROQ_MODEL if provider == "groq" else SOP_OPENAI_MODEL
+        
+        # Build prompt that forces JSON output
+        system_prompt = f"""You are the UTAU AI Copilot on WhatsApp. 
+Determine the user's intent from their message.
+Return ONLY a valid JSON object with the following schema, with no markdown formatting:
+{{
+    "intent": "connect_request" | "provide_sensor_data" | "general_query",
+    "sensor_data": {{"name": "...", "protocol": "...", "endpoint": "..."}},
+    "reply": "Your response to the user"
+}}
+
+RULES for 'reply':
+1. If intent is 'connect_request', ask the user to provide the sensor Name, Protocol (e.g. MQTT/HTTP), and Endpoint URL.
+2. If intent is 'general_query', answer their question based on context. IMPORTANT: If 'SENSORS_CONNECTED' is false, refuse to answer their query, tell them they must connect sensors first, and explicitly ask them to provide their sensor Name, Protocol, and Endpoint to connect.
+3. If listing multiple items, use bullet points with line breaks. Use emojis.
+4. You CAN process photos and videos for automated thermal and drone inspections. If the user asks if they can send a video or photo, enthusiastically say YES and tell them to just attach it right here in the chat!
+"""
+
+        recent_count = len(anomaly_event_history)
+        latest_anomaly = anomaly_event_history[-1] if recent_count > 0 else None
+        latest_info = f"Latest anomaly was {latest_anomaly['anomaly_type']} on {latest_anomaly.get('top_sensor','unknown')}." if latest_anomaly else "No anomalies detected yet."
+        
+        context_msg = f"User message: '{body}'.\nSystem Context: SENSORS_CONNECTED={session['sensors_connected']}, STATE={session['state']}, Dataset={DATASET}, Total anomalies={recent_count}. {latest_info}"
+        
+        request_body = {
+            "model": model,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": context_msg}
+            ],
+            "temperature": 0.1,
+        }
+        
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(request_body).encode("utf-8"),
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"},
+            method="POST",
+        )
+        
+        def _fetch():
+            with urllib.request.urlopen(req, timeout=30) as response:
+                return json.loads(response.read().decode("utf-8"))
+                
+        parsed = await asyncio.to_thread(_fetch)
+        content = parsed.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+        
+        # Parse JSON
+        import json as _json
+        try:
+            result = _json.loads(content)
+        except:
+            result = {"intent": "general_query", "reply": "I'm having trouble understanding that right now."}
+            
+        intent = result.get("intent", "general_query")
+        reply_text = result.get("reply", "")
+        
+        if intent == "connect_request":
+            session["state"] = "awaiting_sensor_details"
+            
+        elif intent == "provide_sensor_data":
+            # Attempt to connect
+            sensor_data = result.get("sensor_data", {})
+            name = sensor_data.get("name") or "WhatsApp-Sensor"
+            proto = sensor_data.get("protocol") or "MQTT"
+            ep = sensor_data.get("endpoint") or "tcp://localhost"
+            
+            # Automatically create the source
+            try:
+                payload = SourceCreatePayload(name=name, protocol=proto, endpoint=ep)
+                await create_source(payload)
+                session["sensors_connected"] = True
+                session["state"] = "default"
+                reply_text = f"✅ Successfully connected {name} via {proto}! Live telemetry is now streaming to your UTAU Command Center. How can I help you?"
+            except Exception as e:
+                reply_text = f"⚠️ Failed to connect sensor: {e}"
+        
+        twilio_client.messages.create(from_=TWILIO_FROM_WHATSAPP, to=from_number, body=reply_text)
+        
+    except Exception as e:
+        print(f"[TWILIO WEBHOOK] Error processing text: {e}")
+
+@app.post("/api/whatsapp/webhook")
+async def whatsapp_webhook(request: Request, bg_tasks: BackgroundTasks):
+    try:
+        form = await request.form()
+        body = form.get("Body", "").strip()
+        from_num = form.get("From", "")
+        num_media = int(form.get("NumMedia", "0"))
+        
+        if num_media > 0:
+            media_url = form.get("MediaUrl0")
+            content_type = form.get("MediaContentType0", "")
+            if media_url:
+                bg_tasks.add_task(process_whatsapp_media, media_url, content_type, from_num)
+        elif body:
+            bg_tasks.add_task(process_whatsapp_text, body, from_num)
+            
+        return Response(content="<Response></Response>", media_type="application/xml")
+    except Exception as e:
+        print(f"[TWILIO WEBHOOK ERROR] {e}")
+        return Response(content="<Response></Response>", media_type="application/xml")
+
+
 try:
     from fastapi.staticfiles import StaticFiles
     _inspection_jobs_dir = os.path.join(_SERVER_DIR, "drone_inspection", "jobs")
