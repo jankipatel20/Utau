@@ -149,18 +149,17 @@ ${dbBlock}
     setIsLoading(true);
 
     try {
-      const apiKey = import.meta.env.VITE_GROQ_API_KEY;
+
       const systemMessage = { role: 'system', content: buildSystemPrompt() };
       const apiHistory = messages.map(m => ({ role: m.role, content: m.content }));
 
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const res = await fetch('http://127.0.0.1:8000/api/chat', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'openai/gpt-oss-120b',
           messages: [systemMessage, ...apiHistory, { role: 'user', content: userMsg }],
           temperature: 0.15,
         }),
@@ -365,12 +364,12 @@ ${dbBlock}
                           <ReactMarkdown
                             components={{
                               strong: ({ ...props }) => <strong style={{ color: 'var(--gold, #C9921A)', fontWeight: 700 }} {...props} />,
-                              p: ({ ...props }) => <p style={{ margin: '0 0 6px 0' }} {...props} />,
-                              ul: ({ ...props }) => <ul style={{ listStyleType: 'square', paddingLeft: 16, margin: '4px 0' }} {...props} />,
-                              li: ({ ...props }) => <li style={{ marginBottom: 3 }} {...props} />,
+                              p: ({ ...props }) => <p style={{ margin: '0 0 6px 0', color: 'inherit' }} {...props} />,
+                              ul: ({ ...props }) => <ul style={{ listStyleType: 'square', paddingLeft: 16, margin: '4px 0', color: 'inherit' }} {...props} />,
+                              li: ({ ...props }) => <li style={{ marginBottom: 3, color: 'inherit' }} {...props} />,
                               code: ({ ...props }) => <code style={{ background: 'rgba(201,146,42,0.12)', padding: '1px 4px', borderRadius: 2, fontSize: 10.5, color: '#E8B84B' }} {...props} />,
-                              h2: ({ ...props }) => <h2 style={{ fontSize: 12, color: '#F0EBE0', margin: '8px 0 4px', letterSpacing: '0.06em' }} {...props} />,
-                              h3: ({ ...props }) => <h3 style={{ fontSize: 11, color: '#A09D94', margin: '6px 0 3px' }} {...props} />,
+                              h2: ({ ...props }) => <h2 style={{ fontSize: 12, color: 'inherit', margin: '8px 0 4px', letterSpacing: '0.06em' }} {...props} />,
+                              h3: ({ ...props }) => <h3 style={{ fontSize: 11, color: 'inherit', margin: '6px 0 3px' }} {...props} />,
                             }}
                           >
                             {msg.content}

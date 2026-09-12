@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const GOLD = '#C9922A';
 const GOLD_BRIGHT = '#E8B84B';
@@ -85,6 +86,8 @@ const GLOBAL_CSS = `
   .core-value-anim { animation: countup 1s ease-out forwards; }
   .fade-in { opacity: 0; transform: translateY(20px); transition: opacity .7s ease, transform .7s ease; }
   .fade-in.visible { opacity: 1; transform: translateY(0); }
+  .blink-cursor { animation: blink 1s step-end infinite; }
+  .glass-card { background: rgba(28,26,23,0.5); backdrop-filter: blur(12px); border: 1px solid rgba(201,146,42,0.15); border-radius: 8px; }
 `;
 
 function GlobalStyles() {
@@ -143,42 +146,54 @@ function Nav({ onLaunch }) {
     <nav style={{
       position: 'sticky', top: 0, zIndex: 100,
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 48px', height: 64,
+      padding: '0 32px', height: 72,
       background: 'rgba(8,8,7,0.92)',
       borderBottom: '1px solid var(--border)',
       backdropFilter: 'blur(12px)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 32, height: 32, border: '1.5px solid var(--gold)', transform: 'rotate(45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="logo-icon-inner" style={{ width: 12, height: 12, background: 'var(--gold)' }} />
+      {/* Brand */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, border: '1.5px solid var(--gold)', transform: 'rotate(45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="logo-icon-inner" style={{ width: 12, height: 12, background: 'var(--gold)' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, letterSpacing: '0.2em', color: '#F0EBE0', lineHeight: 1 }}>UTAU</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 500, color: '#A09D94', letterSpacing: '0.35em', lineHeight: 1 }}>RENEWABLE ENERGY HUB</div>
+          </div>
         </div>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, letterSpacing: '0.2em', color: 'var(--text)' }}>
-          UTAU<span style={{ color: 'var(--gold)' }}></span>
-        </span>
       </div>
 
-      <ul style={{ display: 'flex', alignItems: 'center', gap: 32, listStyle: 'none' }}>
-        {['ARCHITECTURE', 'TELEMETRY', 'GOVERNANCE', 'DOCS'].map(l => (
-          <li key={l}>
-            <a href="#" style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, letterSpacing: '0.18em', color: 'var(--text-muted)', textDecoration: 'none' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--gold)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-            >{l}</a>
-          </li>
-        ))}
-      </ul>
+      {/* Center Nav Pills */}
+      <div style={{ flex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(28,26,23,0.5)', padding: '4px', borderRadius: 6, border: '1px solid rgba(201,146,42,0.15)' }}>
+          {['ARCHITECTURE', 'TELEMETRY', 'GOVERNANCE', 'DOCS'].map(l => (
+            <button key={l} style={{
+              padding: '6px 16px', borderRadius: 4, background: 'transparent', border: '1px solid transparent',
+              fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em',
+              color: '#A09D94', cursor: 'pointer', transition: 'all 0.2s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.color = '#F0EBE0'; e.currentTarget.style.background = 'rgba(201,146,42,0.1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = '#A09D94'; e.currentTarget.style.background = 'transparent'; }}
+            >{l}</button>
+          ))}
+        </div>
+      </div>
 
-      <button onClick={onLaunch} style={{
-        display: 'flex', alignItems: 'center', gap: 8, padding: '9px 20px',
-        border: '1px solid var(--gold)', background: 'var(--gold-dim)',
-        fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em',
-        color: 'var(--gold)', cursor: 'pointer',
-      }}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(201,146,42,0.16)'; e.currentTarget.style.boxShadow = 'var(--gold-glow)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'var(--gold-dim)'; e.currentTarget.style.boxShadow = 'none'; }}
-      >
-        INITIALIZE SYSTEM →
-      </button>
+      {/* Right */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+        <button onClick={onLaunch} style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 24px', borderRadius: 4,
+          border: '1px solid var(--gold)', background: 'rgba(201,146,42,0.1)',
+          fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 600, letterSpacing: '0.15em',
+          color: 'var(--gold-bright)', cursor: 'pointer', transition: 'all .2s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(201,146,42,0.2)'; e.currentTarget.style.boxShadow = 'var(--gold-glow)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(201,146,42,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+        >
+          INITIALIZE SYSTEM →
+        </button>
+      </div>
     </nav>
   );
 }
@@ -249,12 +264,25 @@ function VisualCore() {
   );
 }
 
-/* ── HERO ── */
+function TypewriterText({ text, speed = 40 }) {
+  const [displayed, setDisplayed] = useState('');
+  useEffect(() => {
+    let i = 0;
+    const t = setInterval(() => {
+      setDisplayed(text.slice(0, i + 1));
+      i++;
+      if (i >= text.length) clearInterval(t);
+    }, speed);
+    return () => clearInterval(t);
+  }, [text, speed]);
+  return <span>{displayed}<span className="blink-cursor">|</span></span>;
+}
+
 function Hero({ onLaunch }) {
   return (
     <section style={{
       position: 'relative', zIndex: 10,
-      minHeight: 'calc(100vh - 64px - 37px)',
+      minHeight: 'calc(100vh - 72px - 37px)',
       display: 'grid', gridTemplateColumns: '1fr 1fr',
       alignItems: 'center',
       padding: '0 48px 0 64px', gap: 0, overflow: 'hidden',
@@ -263,12 +291,17 @@ function Hero({ onLaunch }) {
       <div style={{ position: 'absolute', right: -100, top: '50%', transform: 'translateY(-50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(201,146,42,0.06) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
       {/* Left */}
-      <div style={{ paddingRight: 48 }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 40, padding: '6px 14px', border: '1px solid var(--border)', background: 'var(--bg-card)' }}>
-          <span className="eyebrow-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#27AE60', boxShadow: '0 0 8px #27AE60', display: 'inline-block' }} />
-          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.2em', color: 'var(--text-muted)' }}>ALL SYSTEMS NOMINAL</span>
-          <span style={{ color: 'var(--border)' }}>|</span>
-          <span style={{ fontSize: 10, color: 'var(--gold)', fontWeight: 500, letterSpacing: '0.1em' }}>V4.2.1-STABLE</span>
+      <motion.div 
+        initial={{ x: -50, opacity: 0 }} 
+        animate={{ x: 0, opacity: 1 }} 
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        style={{ paddingRight: 48 }}
+      >
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 40, padding: '4px 12px', borderRadius: 50, border: '1px solid rgba(39, 174, 96, 0.3)', background: 'rgba(39, 174, 96, 0.08)' }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#27AE60', display: 'inline-block' }} />
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', color: '#1B5E20' }}>SYSTEMS NOMINAL</span>
+          <span style={{ color: 'rgba(39, 174, 96, 0.3)', margin: '0 4px' }}>|</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, letterSpacing: '0.1em', color: '#1B5E20' }}>V4.2.1</span>
         </div>
 
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(72px, 8vw, 108px)', lineHeight: 0.9, letterSpacing: '0.02em', color: 'var(--text)', marginBottom: 12 }}>
@@ -281,14 +314,14 @@ function Hero({ onLaunch }) {
 
         <div style={{ width: 80, height: 1, background: 'linear-gradient(90deg, var(--gold), transparent)', margin: '32px 0' }} />
 
-        <p style={{ fontFamily: 'var(--font-serif)', fontSize: 17, lineHeight: 1.7, color: 'var(--text-muted)', maxWidth: 460, marginBottom: 48 }}>
-          Eliminate unplanned downtime for Solar & Wind assets. UTAU fuses high-dimensional telemetry with deep learning to predict structural degradation and quantify revenue-at-risk before infrastructure fails.
-        </p>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 14, lineHeight: 1.8, color: 'var(--gold)', maxWidth: 480, marginBottom: 48, minHeight: 60, fontWeight: 500 }}>
+          <TypewriterText text="UTAU: Advanced spatio-temporal telemetry analysis for zero-downtime renewable energy infrastructures." speed={25} />
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <button onClick={onLaunch} style={{
             display: 'inline-flex', alignItems: 'center', gap: 12,
-            padding: '15px 32px', background: 'var(--gold)',
+            padding: '15px 32px', background: 'var(--gold)', borderRadius: 4,
             border: '1px solid var(--gold-bright)',
             fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, letterSpacing: '0.15em',
             color: '#0A0800', cursor: 'pointer', transition: 'all .2s',
@@ -296,24 +329,18 @@ function Hero({ onLaunch }) {
             onMouseEnter={e => { e.currentTarget.style.background = GOLD_BRIGHT; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 32px rgba(201,146,42,0.3)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = GOLD; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none'; }}
           >ENTER DASHBOARD →</button>
-
-          <button style={{
-            display: 'inline-flex', alignItems: 'center', gap: 10,
-            padding: '15px 32px', background: 'transparent',
-            border: '1px solid var(--text-dim)',
-            fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500, letterSpacing: '0.15em',
-            color: 'var(--text-muted)', cursor: 'pointer', transition: 'all .2s',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--text-dim)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-          >VIEW ARCHITECTURE</button>
         </div>
-      </div>
+      </motion.div>
 
       {/* Right */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }} 
+        animate={{ scale: 1, opacity: 1 }} 
+        transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
         <VisualCore />
-      </div>
+      </motion.div>
     </section>
   );
 }
@@ -339,14 +366,15 @@ function StatsBar() {
 function StatCell({ idx, val, suffix, label, delta, isLast, delay }) {
   const [hov, setHov] = useState(false);
   return (
-    <div className="fade-in" style={{
-      padding: '40px 48px',
-      borderRight: isLast ? 'none' : '1px solid var(--border)',
-      position: 'relative', overflow: 'hidden',
-      background: hov ? 'var(--gold-dim)' : 'transparent',
-      transitionDelay: `${delay}s`,
-      transition: 'background .3s',
-    }}
+    <motion.div 
+      initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.6, delay: delay * 0.5 }}
+      style={{
+        padding: '40px 48px',
+        borderRight: isLast ? 'none' : '1px solid var(--border)',
+        position: 'relative', overflow: 'hidden',
+        background: hov ? 'var(--gold-dim)' : 'transparent',
+        transition: 'background .3s',
+      }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
     >
@@ -358,11 +386,11 @@ function StatCell({ idx, val, suffix, label, delta, isLast, delay }) {
       </div>
       <div style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.12em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</div>
       {delta && (
-        <div style={{ position: 'absolute', top: 40, right: 48, fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', color: '#27AE60', display: 'flex', alignItems: 'center', gap: 4 }}>
+        <div style={{ position: 'absolute', top: 40, right: 48, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: '#27AE60', display: 'flex', alignItems: 'center', gap: 4 }}>
           ▲ {delta}
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
 
@@ -392,7 +420,7 @@ const labelColors = { gold: GOLD, red: CRIMSON, copper: COPPER };
 
 function ArchSection() {
   return (
-    <section style={{ position: 'relative', zIndex: 10, padding: '120px 64px' }}>
+    <section style={{ position: 'relative', zIndex: 10, padding: '100px 64px 40px 64px' }}>
       <SectionLabel num="02" text="ENTERPRISE ARCHITECTURE" />
       <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(48px,6vw,80px)', letterSpacing: '0.02em', lineHeight: 0.95, color: 'var(--text)', marginBottom: 24 }}>
         ENGINEERED<br />FOR RESILIENCE.
@@ -410,11 +438,13 @@ function ArchSection() {
 function ArchCard({ num, labelClass, label, pipeline, title, desc, delay }) {
   const [hov, setHov] = useState(false);
   return (
-    <div className="fade-in" style={{
-      background: hov ? 'var(--bg-card)' : 'var(--bg-panel)',
-      padding: '56px 48px', position: 'relative', overflow: 'hidden',
-      transition: 'background .3s', transitionDelay: `${delay}s`,
-    }}
+    <motion.div 
+      initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6, delay: delay * 0.5 }}
+      style={{
+        background: hov ? 'var(--bg-card)' : 'var(--bg-panel)',
+        padding: '56px 48px', position: 'relative', overflow: 'hidden',
+        transition: 'background .3s',
+      }}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
     >
@@ -425,33 +455,34 @@ function ArchCard({ num, labelClass, label, pipeline, title, desc, delay }) {
         {label}
       </span>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
         {pipeline.map((p, i) => (
           <React.Fragment key={i}>
-            <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-dim)', padding: '3px 8px', border: '1px solid var(--text-dim)' }}>{p}</span>
-            {i < pipeline.length - 1 && <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>→</span>}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--gold-bright)', padding: '4px 10px', border: '1px solid rgba(201,146,42,0.3)', borderRadius: 4, background: 'rgba(201,146,42,0.1)' }}>{p}</span>
+            {i < pipeline.length - 1 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→</span>}
           </React.Fragment>
         ))}
       </div>
 
       <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 28, letterSpacing: '0.05em', color: 'var(--text)', marginBottom: 16, lineHeight: 1.1, whiteSpace: 'pre-line' }}>{title}</h3>
       <p style={{ fontFamily: 'var(--font-serif)', fontSize: 16, lineHeight: 1.65, color: 'var(--text-muted)' }}>{desc}</p>
-    </div>
+    </motion.div>
   );
 }
 
 /* ── SIGNAL CHART (canvas) ── */
-function SignalChart() {
-  const canvasRef = useRef(null);
-  const chartRef = useRef(null);
-  const dataRef = useRef([]);
+function SignalChart({ title = 'VIBRATION SPECTRUM — WIND TURBINE W-07', seed = 0 }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<any>(null);
+  const intervalRef = useRef<any>(null);
+  const dataRef = useRef(Array(20).fill(0.5));
 
   useEffect(() => {
     const NUM = 80;
     function genSignal() {
       const d = [];
       for (let i = 0; i < NUM; i++) {
-        let v = 0.5 + Math.sin(i * 0.18) * 0.25 + Math.random() * 0.12;
+        let v = 0.5 + Math.sin(i * (0.18 + seed * 0.05)) * 0.25 + Math.random() * 0.12;
         if (i > 55 && i < 68) v += (i - 55) * 0.07 + Math.random() * 0.2;
         d.push(parseFloat(v.toFixed(2)));
       }
@@ -520,7 +551,8 @@ function SignalChart() {
         },
       });
 
-      const interval = setInterval(() => {
+      const intervalId = setInterval(() => {
+        if (!chartRef.current) return;
         dataRef.current.shift();
         const v = parseFloat((0.5 + Math.sin(Date.now() * 0.001) * 0.25 + Math.random() * 0.12).toFixed(2));
         dataRef.current.push(v);
@@ -529,23 +561,26 @@ function SignalChart() {
         chartRef.current.update();
       }, 800);
 
-      return () => clearInterval(interval);
+      intervalRef.current = intervalId;
     });
 
-    return () => { if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
+    return () => { 
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } 
+    };
   }, []);
 
   return (
-    <div style={{ border: '1px solid var(--border)', background: 'var(--bg)', padding: 32, position: 'relative' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>VIBRATION SPECTRUM — WIND TURBINE W-07</span>
+    <div style={{ border: '1px solid var(--border)', background: 'var(--bg)', padding: '24px 32px', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>{title}</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 600, letterSpacing: '0.15em', color: '#27AE60' }}>
           <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#27AE60', boxShadow: '0 0 6px #27AE60', display: 'inline-block' }} />
           LIVE FEED
         </span>
       </div>
-      <div style={{ position: 'relative', height: 160 }}>
-        <canvas ref={canvasRef} style={{ width: '100%', height: 160 }} />
+      <div style={{ position: 'relative', height: 120 }}>
+        <canvas ref={canvasRef} style={{ width: '100%', height: 120 }} />
         {/* Anomaly marker */}
         <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${(60 / 80) * 100}%`, width: 1, background: 'rgba(192,57,43,0.6)', pointerEvents: 'none' }}>
           <span style={{ position: 'absolute', top: -20, left: 4, fontSize: 8, fontWeight: 600, letterSpacing: '0.12em', color: CRIMSON }}>ANOMALY</span>
@@ -591,10 +626,13 @@ const sevBg = { critical: 'rgba(192,57,43,0.1)', warning: 'var(--gold-dim)', nom
 function AlertCard({ alert, delay }) {
   const c = sevColors[alert.sev];
   return (
-    <div className="fade-in" style={{
-      background: 'var(--bg)', border: `1px solid var(--border)`, borderLeft: `2px solid ${c}`,
-      padding: '20px 24px', transitionDelay: `${delay}s`,
-    }}>
+    <motion.div 
+      initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: delay * 0.5 }}
+      style={{
+        background: 'var(--bg)', border: `1px solid var(--border)`, borderLeft: `2px solid ${c}`,
+        padding: '20px 24px', borderRadius: 4
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.15em', padding: '2px 8px', color: c, background: sevBg[alert.sev] }}>{alert.badge}</span>
         <span style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.08em' }}>{alert.time}</span>
@@ -615,18 +653,21 @@ function AlertCard({ alert, delay }) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 /* ── MONITOR SECTION ── */
 function MonitorSection() {
   return (
-    <div style={{ position: 'relative', zIndex: 10, padding: '80px 64px', borderTop: '1px solid var(--border)', background: 'var(--bg-panel)' }}>
+    <div style={{ position: 'relative', zIndex: 10, padding: '40px 64px 80px 64px', background: 'var(--bg-panel)' }}>
       <SectionLabel num="03" text="LIVE SIGNAL MONITOR" />
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 48, alignItems: 'start' }}>
-        <SignalChart />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <SignalChart title="VIBRATION SPECTRUM — WIND TURBINE W-07" seed={0} />
+          <SignalChart title="THERMAL ENVELOPE — SOLAR ARRAY S-12" seed={1} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {ALERTS.map((a, i) => <AlertCard key={i} alert={a} delay={i * 0.15} />)}
         </div>
       </div>
@@ -637,14 +678,17 @@ function MonitorSection() {
 /* ── FOOTER CTA ── */
 function FooterCTA({ onLaunch }) {
   return (
-    <div className="fade-in" style={{
-      position: 'relative', zIndex: 10,
-      padding: '120px 64px',
-      borderTop: '1px solid var(--border)',
-      display: 'grid', gridTemplateColumns: '1fr auto',
-      alignItems: 'center', gap: 48,
-      background: 'var(--bg)', overflow: 'hidden',
-    }}>
+    <motion.div 
+      initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.8 }}
+      style={{
+        position: 'relative', zIndex: 10,
+        padding: '120px 64px',
+        borderTop: '1px solid var(--border)',
+        display: 'grid', gridTemplateColumns: '1fr auto',
+        alignItems: 'center', gap: 48,
+        background: 'var(--bg)', overflow: 'hidden',
+      }}
+    >
       <div style={{ position: 'absolute', left: 64, bottom: -60, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(201,146,42,0.04) 0%, transparent 60%)', pointerEvents: 'none' }} />
       <div>
         <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.2em', color: 'var(--text-muted)', marginBottom: 20 }}>INITIALIZE DEPLOYMENT</div>
@@ -675,7 +719,7 @@ function FooterCTA({ onLaunch }) {
           SOC 2 TYPE II · ISO 27001 · NERC CIP COMPLIANT
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -713,27 +757,8 @@ function SectionLabel({ num, text }) {
   );
 }
 
-/* ── SCROLL OBSERVER ── */
-function useScrollReveal() {
-  useEffect(() => {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(e => {
-        if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); }
-      });
-    }, { threshold: 0.1 });
-    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
-    setTimeout(() => {
-      document.querySelectorAll('.fade-in').forEach(el => {
-        if (el.getBoundingClientRect().top < window.innerHeight) el.classList.add('visible');
-      });
-    }, 100);
-    return () => observer.disconnect();
-  }, []);
-}
-
 /* ── ROOT ── */
 export default function LandingPage({ onLaunch = () => { } }) {
-  useScrollReveal();
   return (
     <>
       <FontLoader />

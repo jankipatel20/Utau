@@ -1,5 +1,5 @@
 // Header.tsx — Dark Prestige UTAU Command Center Header
-import { Activity, Cpu, Radio, Zap, MessageSquare, FileDown, Layers, Camera } from 'lucide-react';
+import { Activity, Cpu, Radio, Zap, MessageSquare, FileDown, Layers, Camera, Sun, Wind, Box } from 'lucide-react';
 
 export type SystemState = 'HEALTHY' | 'WARNING' | 'CRITICAL';
 
@@ -41,114 +41,150 @@ export function UtauHeader({
 
   return (
     <header style={{
-      height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '0 48px', borderBottom: '1px solid var(--border)', background: 'rgba(8,8,7,0.92)',
+      height: 72, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 32px', borderBottom: '1px solid var(--border)', background: 'rgba(8,8,7,0.92)',
       backdropFilter: 'blur(12px)', position: 'relative', zIndex: 100
     }}>
 
-      {/* ── Brand ── */}
-      <button onClick={onNavigateHome} style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
-        <div style={{ width: 32, height: 32, border: '1.5px solid var(--gold)', transform: 'rotate(45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="logo-icon-inner" style={{ width: 12, height: 12, background: 'var(--gold)' }} />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: '0.2em', color: '#F0EBE0', lineHeight: 1 }}>
-            UTAU
+      {/* ── Brand (Left) ── */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start' }}>
+        <button onClick={onNavigateHome} style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+          <div style={{ width: 32, height: 32, border: '1.5px solid var(--gold)', transform: 'rotate(45deg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="logo-icon-inner" style={{ width: 12, height: 12, background: 'var(--gold)' }} />
           </div>
-          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 500, color: '#A09D94', letterSpacing: '0.35em', lineHeight: 1 }}>
-            RENEWABLE ENERGY HUB
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: '0.2em', color: '#F0EBE0', lineHeight: 1 }}>
+              UTAU
+            </div>
+            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 500, color: '#A09D94', letterSpacing: '0.35em', lineHeight: 1 }}>
+              RENEWABLE ENERGY HUB
+            </div>
           </div>
-        </div>
-      </button>
-
-      {/* ── Dataset Tabs ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {tabs.map(t => (
-          <button
-            key={t.value}
-            style={tabStyle(activeDataset === t.value)}
-            disabled={isTransitioning}
-            onClick={() => onChangeDataset(t.value)}
-            onMouseEnter={e => { if (activeDataset !== t.value) e.currentTarget.style.color = '#F0EBE0'; }}
-            onMouseLeave={e => { if (activeDataset !== t.value) e.currentTarget.style.color = '#A09D94'; }}
-          >
-            {t.label}
-          </button>
-        ))}
+        </button>
       </div>
 
-      {/* ── Feature Tabs ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button
-          style={{ ...tabStyle(activeFeatureTab === 'live'), display: 'flex', alignItems: 'center', gap: 8 }}
-          onClick={() => onFeatureTabChange('live')}
-        >
-          <Radio size={12} color="var(--gold)" /> LIVE FEED
-        </button>
-        {isAnomalySourceTabEnabled && (
+      {/* ── Center Navigation ── */}
+      <div style={{ flex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 24 }}>
+        
+        {/* Dataset Segmented Control */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(28,26,23,0.5)', padding: '4px', borderRadius: 6, border: '1px solid rgba(201,146,42,0.15)' }}>
+          {tabs.map(t => (
+            <button
+              key={t.value}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '6px 16px', borderRadius: 4,
+                background: activeDataset === t.value ? 'rgba(201,146,42,0.15)' : 'transparent',
+                border: activeDataset === t.value ? '1px solid rgba(201,146,42,0.3)' : '1px solid transparent',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '0.15em',
+                color: activeDataset === t.value ? 'var(--gold-bright)' : '#A09D94',
+                cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              disabled={isTransitioning}
+              onClick={() => onChangeDataset(t.value)}
+              onMouseEnter={e => { if (activeDataset !== t.value) e.currentTarget.style.color = '#F0EBE0'; }}
+              onMouseLeave={e => { if (activeDataset !== t.value) e.currentTarget.style.color = '#A09D94'; }}
+            >
+              {t.value === 'solar_synthetic' && <Sun size={12} color={activeDataset === t.value ? 'var(--gold-bright)' : '#A09D94'} style={{ transition: 'color 0.2s' }} />}
+              {t.value === 'wind_synthetic' && <Wind size={12} color={activeDataset === t.value ? 'var(--gold-bright)' : '#A09D94'} style={{ transition: 'color 0.2s' }} />}
+              {t.value === 'synthetic' && <Box size={12} color={activeDataset === t.value ? 'var(--gold-bright)' : '#A09D94'} style={{ transition: 'color 0.2s' }} />}
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* View Mode Segmented Control */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(28,26,23,0.5)', padding: '4px', borderRadius: 6, border: '1px solid rgba(201,146,42,0.15)' }}>
           <button
-            style={{ ...tabStyle(activeFeatureTab === 'anomaly-source'), display: 'flex', alignItems: 'center', gap: 8 }}
-            onClick={() => onFeatureTabChange('anomaly-source')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 4,
+              background: activeFeatureTab === 'live' ? 'rgba(201,146,42,0.15)' : 'transparent',
+              border: activeFeatureTab === 'live' ? '1px solid rgba(201,146,42,0.3)' : '1px solid transparent',
+              fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+              color: activeFeatureTab === 'live' ? '#F0EBE0' : '#A09D94', cursor: 'pointer', transition: 'all 0.2s',
+            }}
+            onClick={() => onFeatureTabChange('live')}
           >
-            <Cpu size={12} color="var(--crimson)" /> ANOMALY SOURCE
+            <Radio size={12} color={activeFeatureTab === 'live' ? 'var(--gold)' : '#A09D94'} /> LIVE
           </button>
-        )}
-        {isDataSourceTabEnabled && (
+          
+          {isAnomalySourceTabEnabled && (
+            <button
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 4,
+                background: activeFeatureTab === 'anomaly-source' ? 'rgba(168,50,64,0.15)' : 'transparent',
+                border: activeFeatureTab === 'anomaly-source' ? '1px solid rgba(168,50,64,0.3)' : '1px solid transparent',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+                color: activeFeatureTab === 'anomaly-source' ? '#F0EBE0' : '#A09D94', cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              onClick={() => onFeatureTabChange('anomaly-source')}
+            >
+              <Cpu size={12} color={activeFeatureTab === 'anomaly-source' ? 'var(--crimson)' : '#A09D94'} /> ANOMALIES
+            </button>
+          )}
+
+          {isDataSourceTabEnabled && (
+            <button
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', borderRadius: 4,
+                background: activeFeatureTab === 'data-source' ? 'rgba(42,122,106,0.15)' : 'transparent',
+                border: activeFeatureTab === 'data-source' ? '1px solid rgba(42,122,106,0.3)' : '1px solid transparent',
+                fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+                color: activeFeatureTab === 'data-source' ? '#F0EBE0' : '#A09D94', cursor: 'pointer', transition: 'all 0.2s',
+              }}
+              onClick={() => onFeatureTabChange('data-source')}
+            >
+              <Activity size={12} color={activeFeatureTab === 'data-source' ? 'var(--teal)' : '#A09D94'} /> DATA
+            </button>
+          )}
+        </div>
+
+        {/* Global Tools */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginLeft: 8 }}>
           <button
-            style={{ ...tabStyle(activeFeatureTab === 'data-source'), display: 'flex', alignItems: 'center', gap: 8 }}
-            onClick={() => onFeatureTabChange('data-source')}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: '#F0EBE0', cursor: 'pointer', letterSpacing: '0.1em' }}
+            onClick={onNavigateToFleet}
           >
-            <Activity size={12} color="var(--teal)" /> DATA SOURCES
+            <Layers size={14} color="var(--copper)" /> FLEET
           </button>
-        )}
-        {isRlPolicySuggestionsEnabled && (
-          <button style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Zap size={12} color="var(--copper)" /> RL POLICY
-          </button>
-        )}
-        <button
-          style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8, borderLeft: '1px solid rgba(201,146,42,0.12)', paddingLeft: 24, marginLeft: 8 }}
-          onClick={onNavigateToFleet}
-        >
-          <Layers size={12} color="var(--copper)" /> FLEET
-        </button>
-        {onNavigateToInspect && (
+          {onNavigateToInspect && (
+            <button
+              style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: '#F0EBE0', cursor: 'pointer', letterSpacing: '0.1em' }}
+              onClick={onNavigateToInspect}
+            >
+              <Camera size={14} color="var(--teal)" /> INSPECT
+            </button>
+          )}
           <button
-            style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8 }}
-            onClick={onNavigateToInspect}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: '#F0EBE0', cursor: 'pointer', letterSpacing: '0.1em' }}
+            onClick={onNavigateToChat}
           >
-            <Camera size={12} color="var(--teal)" /> INSPECT
+            <MessageSquare size={14} color="var(--gold)" /> COPILOT
           </button>
-        )}
-        <button
-          style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8 }}
-          onClick={onNavigateToChat}
-        >
-          <MessageSquare size={12} color="#F0EBE0" /> AI COPILOT
-        </button>
-        {onGeneratePDF && (
-          <button
-            style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8, border: '1px solid rgba(201,146,42,0.4)', borderRadius: '4px', padding: '4px 12px', background: 'rgba(201,146,42,0.1)', marginLeft: 8 }}
-            onClick={onGeneratePDF}
-            title="Export High-Quality PDF Report"
-          >
-            <FileDown size={14} color="var(--gold-bright)" /> 
-            <span style={{ color: 'var(--gold-bright)', fontWeight: 600 }}>EXPORT PDF</span>
-          </button>
-        )}
+
+          {onGeneratePDF && (
+            <button
+              style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--gold-bright)', borderRadius: 4, padding: '6px 16px', background: 'rgba(212,168,83,0.1)', cursor: 'pointer' }}
+              onClick={onGeneratePDF}
+            >
+              <FileDown size={14} color="var(--gold-bright)" /> 
+              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 700, color: 'var(--gold-bright)', letterSpacing: '0.1em' }}>EXPORT</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* ── Status + Connection ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', border: `1px solid ${color}40`, background: `${color}10` }}>
+      {/* ── Status + Connection (Right) ── */}
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 4, border: `1px solid ${color}40`, background: `${color}10` }}>
           <span className="eyebrow-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: color, boxShadow: `0 0 8px ${color}`, display: 'inline-block' }} />
           <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color, letterSpacing: '0.2em' }}>
             {stateLabel(state)}
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', border: '1px solid rgba(201,146,42,0.12)', background: 'rgba(28,26,23,0.8)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderRadius: 4, border: '1px solid rgba(201,146,42,0.2)', background: 'rgba(28,26,23,0.8)' }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: isConnected ? 'var(--gold-bright)' : '#A09D94', display: 'inline-block', animation: isConnected ? 'dot-pulse 1.6s infinite' : 'none' }} />
-          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: isConnected ? 'var(--gold-bright)' : '#A09D94', letterSpacing: '0.15em' }}>
+          <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, fontWeight: 600, color: isConnected ? 'var(--gold-bright)' : '#A09D94', letterSpacing: '0.15em' }}>
             {isConnected ? 'STREAMING' : 'OFFLINE'}
           </span>
         </div>
