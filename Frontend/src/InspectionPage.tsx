@@ -132,25 +132,31 @@ export default function InspectionPage({ onBack, activeDataset }: InspectionPage
     setSelectedFrame(null);
     setSubmitting(true);
     try {
-      const body: any = {
-        asset_id: assetId,
-        asset_type: assetType,
-      };
+      let res: Response;
+
       if (inputMode === 'youtube') {
         if (!youtubeUrl.trim()) { setError('Enter a YouTube URL'); setSubmitting(false); return; }
-        body.youtube_url = youtubeUrl.trim();
+        res = await fetch(`${API}/api/inspection/upload`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            asset_id: assetId,
+            asset_type: assetType,
+            youtube_url: youtubeUrl.trim(),
+          }),
+        });
       } else {
         if (!selectedFile) { setError('Select a video file'); setSubmitting(false); return; }
-        const tempPath = selectedFile.name;
-        body.source_type = 'file';
-        body.source_value = tempPath;
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('asset_id', assetId);
+        formData.append('asset_type', assetType);
+        res = await fetch(`${API}/api/inspection/upload_file`, {
+          method: 'POST',
+          body: formData,
+        });
       }
 
-      const res = await fetch(`${API}/api/inspection/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -453,7 +459,7 @@ export default function InspectionPage({ onBack, activeDataset }: InspectionPage
 
               {/* Frame gallery */}
               {filteredResults.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
                   {filteredResults.map(fr => (
                     <button
                       key={fr.frame_index}
@@ -464,40 +470,49 @@ export default function InspectionPage({ onBack, activeDataset }: InspectionPage
                         borderRadius: 10, padding: 0, cursor: 'pointer', overflow: 'hidden',
                         textAlign: 'left', transition: 'all 0.2s',
                       }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${G}18`; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
                     >
                       {fr.annotated_file && jobId && (
-                        <img
-                          src={`${API}/inspection-files/${jobId}/annotated/${fr.annotated_file}`}
-                          alt={`Frame ${fr.frame_index}`}
-                          style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block', borderBottom: '1px solid var(--gold-border)' }}
-                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                        />
+                        <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', borderBottom: '1px solid var(--gold-border)' }}>
+                          <img
+                            src={`${API}/inspection-files/${jobId}/annotated/${fr.annotated_file}`}
+                            alt={`Frame ${fr.frame_index}`}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                            onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        </div>
                       )}
-                      <div style={{ padding: 10 }}>
+                      <div style={{ padding: '8px 10px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: TD }}>
-                            Frame {fr.frame_index} • {fr.timestamp_sec.toFixed(1)}s
+                            {fr.timestamp_sec.toFixed(1)}s
                           </span>
                           <span style={{
-                            fontFamily: 'var(--font-display)', fontSize: 9, fontWeight: 700, letterSpacing: '0.12em',
+                            fontFamily: 'var(--font-display)', fontSize: 8, fontWeight: 700, letterSpacing: '0.12em',
                             color: fr.detection_count > 2 ? CR : CU,
-                            padding: '2px 8px', background: `${fr.detection_count > 2 ? CR : CU}12`,
+                            padding: '2px 6px', background: `${fr.detection_count > 2 ? CR : CU}12`,
                             border: `1px solid ${fr.detection_count > 2 ? CR : CU}40`,
                             borderRadius: 12,
                           }}>
                             {fr.detection_count} DEFECT{fr.detection_count !== 1 ? 'S' : ''}
                           </span>
                         </div>
-                        <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                          {fr.detections.map((d, i) => (
+                        <div style={{ display: 'flex', gap: 3, marginTop: 5, flexWrap: 'wrap' }}>
+                          {fr.detections.slice(0, 3).map((d, i) => (
                             <span key={i} style={{
-                              fontFamily: 'var(--font-mono)', fontSize: 9, color: classColor(d.class_name),
-                              padding: '1px 6px', background: `${classColor(d.class_name)}10`,
+                              fontFamily: 'var(--font-mono)', fontSize: 8, color: classColor(d.class_name),
+                              padding: '1px 5px', background: `${classColor(d.class_name)}10`,
                               border: `1px solid ${classColor(d.class_name)}30`, borderRadius: 4,
                             }}>
                               {d.class_name} {(d.confidence * 100).toFixed(0)}%
                             </span>
                           ))}
+                          {fr.detections.length > 3 && (
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: TD }}>
+                              +{fr.detections.length - 3}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </button>

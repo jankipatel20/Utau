@@ -4,7 +4,7 @@ import json
 import numpy as np
 import torch
 import torch.nn as nn
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from collections import deque
@@ -3709,6 +3709,31 @@ async def start_inspection(payload: InspectionUploadPayload):
     if conf_thresh <= 0.25:
         conf_thresh = get_confidence_threshold(payload.asset_type)
     job_id = create_job(payload.asset_id, payload.asset_type, source_type, source_value)
+    asyncio.create_task(run_inspection_job(job_id, conf_thresh))
+    return {"job_id": job_id, "status": "queued", "confidence_threshold": conf_thresh}
+
+@app.post("/api/inspection/upload_file")
+async def start_inspection_file(
+    file: UploadFile = File(...),
+    asset_id: str = Form("solar_asset_00"),
+    asset_type: str = Form("solar"),
+    confidence_threshold: float = Form(0.25),
+):
+    if asset_type not in {"solar", "wind"}:
+        return {"error": "asset_type must be 'solar' or 'wind'"}
+    _upload_dir = os.path.join(_SERVER_DIR, "drone_inspection", "uploads")
+    os.makedirs(_upload_dir, exist_ok=True)
+    import uuid as _uuid
+    safe_name = f"{_uuid.uuid4().hex[:8]}_{file.filename}"
+    save_path = os.path.join(_upload_dir, safe_name)
+    contents = await file.read()
+    with open(save_path, "wb") as f:
+        f.write(contents)
+    from drone_inspection.confidence_config import get_confidence_threshold
+    conf_thresh = confidence_threshold
+    if conf_thresh <= 0.25:
+        conf_thresh = get_confidence_threshold(asset_type)
+    job_id = create_job(asset_id, asset_type, "file", save_path)
     asyncio.create_task(run_inspection_job(job_id, conf_thresh))
     return {"job_id": job_id, "status": "queued", "confidence_threshold": conf_thresh}
 
