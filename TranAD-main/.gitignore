@@ -7,7 +7,8 @@ data/MSDS/metrics
 data/MSDS/train.csv
 data/MSDS/test.csv
 
-TranAD-main/drone_inspection/jobs
+drone_inspection/jobs/
+drone_inspection/uploads/
 
 data
 checkpoints
