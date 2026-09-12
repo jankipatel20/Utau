@@ -131,7 +131,7 @@
 
 //     const handlePopState = () => {
 //       let nextPath = window.location.pathname;
-//       if (nextPath !== '/landing' && nextPath !== '/ai-chat' && nextPath !== '/fleet') nextPath = '/dashboard';
+//       if (nextPath !== '/landing' && nextPath !== '/ai-chat' && nextPath !== '/fleet' && nextPath !== '/inspect') nextPath = '/dashboard';
 //       setCurrentPath(nextPath);
 //     };
 //     window.addEventListener('popstate', handlePopState);
@@ -400,7 +400,9 @@ import DataSourceTab from './components/DataSourceTab';
 import LandingPage from './LandingPage';
 import AIChatPage from './AIChatPage';
 import FleetView from './FleetView';
+import InspectionPage from './InspectionPage';
 import ChatbotPopup from './components/ChatbotPopup';
+import CrossReferenceTimeline from './components/CrossReferenceTimeline';
 import BackgroundViewer from './components/BackgroundViewer';
 import LeftHud from './components/LeftHud';
 import RightHud from './components/RightHud';
@@ -579,7 +581,7 @@ export default function App() {
 
     const handlePopState = () => {
       let nextPath = window.location.pathname;
-      if (nextPath !== '/landing' && nextPath !== '/ai-chat' && nextPath !== '/fleet') nextPath = '/dashboard';
+      if (nextPath !== '/landing' && nextPath !== '/ai-chat' && nextPath !== '/fleet' && nextPath !== '/inspect') nextPath = '/dashboard';
       setCurrentPath(nextPath);
     };
     window.addEventListener('popstate', handlePopState);
@@ -875,6 +877,15 @@ export default function App() {
     );
   }
 
+  if (currentPath === '/inspect') {
+    return (
+      <InspectionPage
+        onBack={() => navigateTo('/dashboard')}
+        activeDataset={activeDataset}
+      />
+    );
+  }
+
   return (
     <div id="utau-dashboard-capture" className="dashboard-immersive" style={{ display: 'flex', flexDirection: 'column' }}>
 
@@ -923,6 +934,7 @@ export default function App() {
           onNavigateHome={() => navigateTo('/landing')}
           onNavigateToChat={() => navigateTo('/ai-chat')}
           onNavigateToFleet={() => navigateTo('/fleet')}
+          onNavigateToInspect={() => navigateTo('/inspect')}
           onGeneratePDF={generatePDFReport}
         />
       </div>
@@ -1047,7 +1059,7 @@ export default function App() {
 
             {/* RIGHT COLUMN: Intelligence & Governance */}
             <div style={{ width: '380px', pointerEvents: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ flex: 1, overflow: 'hidden' }} className="glass-hud">
+              <div style={{ flex: 1, overflow: 'auto' }} className="glass-hud">
                 <RightHud
                   alertExplanation={alertExplanation}
                   activeDataset={activeDataset}
@@ -1062,6 +1074,13 @@ export default function App() {
                   onManualRetrain={triggerManualRetrain}
                   onTriggerAnomaly={triggerManualAnomaly}
                 />
+                <div style={{ padding: '0 12px 12px' }}>
+                  <CrossReferenceTimeline
+                    activeDataset={activeDataset}
+                    isAnomalous={systemState !== 'HEALTHY'}
+                    anomalyScore={data.length > 0 ? (data[data.length - 1].system_loss || 0) : 0}
+                  />
+                </div>
               </div>
             </div>
 

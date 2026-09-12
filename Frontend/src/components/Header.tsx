@@ -1,5 +1,5 @@
 // Header.tsx — Dark Prestige UTAU Command Center Header
-import { Activity, Cpu, Radio, Zap, MessageSquare, FileDown, Layers } from 'lucide-react';
+import { Activity, Cpu, Radio, Zap, MessageSquare, FileDown, Layers, Camera } from 'lucide-react';
 
 export type SystemState = 'HEALTHY' | 'WARNING' | 'CRITICAL';
 
@@ -21,13 +21,14 @@ interface UtauHeaderProps {
   onNavigateHome: () => void;
   onNavigateToChat: () => void;
   onNavigateToFleet: () => void;
+  onNavigateToInspect?: () => void;
   onGeneratePDF?: () => void;
 }
 
 export function UtauHeader({
   state, isConnected, tabs, activeDataset, isTransitioning,
   onChangeDataset, isAnomalySourceTabEnabled, isDataSourceTabEnabled, isRlPolicySuggestionsEnabled,
-  activeFeatureTab, onFeatureTabChange, onNavigateHome, onNavigateToChat, onNavigateToFleet, onGeneratePDF
+  activeFeatureTab, onFeatureTabChange, onNavigateHome, onNavigateToChat, onNavigateToFleet, onNavigateToInspect, onGeneratePDF
 }: UtauHeaderProps) {
   const color = stateColor(state);
 
@@ -111,6 +112,14 @@ export function UtauHeader({
         >
           <Layers size={12} color="var(--copper)" /> FLEET
         </button>
+        {onNavigateToInspect && (
+          <button
+            style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8 }}
+            onClick={onNavigateToInspect}
+          >
+            <Camera size={12} color="var(--teal)" /> INSPECT
+          </button>
+        )}
         <button
           style={{ ...tabStyle(false), display: 'flex', alignItems: 'center', gap: 8 }}
           onClick={onNavigateToChat}
