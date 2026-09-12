@@ -394,15 +394,16 @@ import { AlertTriangle, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { UtauHeader }  from './components/Header';
-import TopologyPanel    from './components/TopologyPanel';
 import { HeroSection, ResidualSection } from './components/CenterPanel';
-import { PredictiveRULPanel, RootCausePanel, SimilarIncidents, GovernancePanel } from './components/RightPanel';
 import AnomalySourceTab from './components/AnomalySourceTab';
 import DataSourceTab from './components/DataSourceTab';
 import LandingPage from './LandingPage';
 import AIChatPage from './AIChatPage';
 import FleetView from './FleetView';
 import ChatbotPopup from './components/ChatbotPopup';
+import BackgroundViewer from './components/BackgroundViewer';
+import LeftHud from './components/LeftHud';
+import RightHud from './components/RightHud';
 
 interface AlertExplanation {
   severity_score: number;
@@ -447,12 +448,14 @@ export default function App() {
   const [dimensions,            setDimensions]            = useState<number>(0);
   const [activeDataset,         setActiveDataset]         = useState('solar_synthetic');
   const [isTransitioning,       setIsTransitioning]       = useState(false);
+  const [isModelLoading,        setIsModelLoading]        = useState(false);
   const [alertExplanation,      setAlertExplanation]      = useState<AlertExplanation | null>(null);
   const [anomalySource,         setAnomalySource]         = useState<any | null>(null);
   const [scoreComponents,       setScoreComponents]       = useState<{ recon: number; forecast: number; corr: number } | null>(null);
   const [feedbackStatus,        setFeedbackStatus]        = useState('');
   const [isSubmittingFeedback,  setIsSubmittingFeedback]  = useState(false);
   const [activeFeatureTab,      setActiveFeatureTab]      = useState<'live' | 'anomaly-source' | 'data-source'>('live');
+  const [activeLeftTab,         setActiveLeftTab]         = useState<'diagnostics' | 'residuals'>('diagnostics');
   const [currentPath,           setCurrentPath]           = useState(() => window.location.pathname === '/dashboard' ? '/dashboard' : '/landing');
 
   // ── NEW: adaptive fine-tune state ────────────────────────────────────────
@@ -479,6 +482,10 @@ export default function App() {
 
   useEffect(() => {
     activeDatasetRef.current = activeDataset;
+    // Trigger a 2.5s visual loading overlay to mask the 3D model auto-play clicks
+    setIsModelLoading(true);
+    const timer = setTimeout(() => setIsModelLoading(false), 2500);
+    return () => clearTimeout(timer);
   }, [activeDataset]);
 
   // ── Poll /api/status every 10 s to pick up model version bumps ───────────
@@ -869,7 +876,7 @@ export default function App() {
   }
 
   return (
-    <div id="utau-dashboard-capture" style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', overflow: 'hidden', background: 'var(--bg-page)' }}>
+    <div id="utau-dashboard-capture" className="dashboard-immersive" style={{ display: 'flex', flexDirection: 'column' }}>
 
       {/* ── Custom Animated Anomaly Popup ── */}
       <AnimatePresence>
@@ -930,73 +937,135 @@ export default function App() {
           <DataSourceTab />
         </div>
       ) : (
-        /* Standard 3-Column Dashboard */
-        <div style={{
-          flex: 1, minHeight: 0,
-          display: 'grid',
-          gridTemplateColumns: '320px 1fr 340px',
-          gap: 16, padding: '16px',
-        }}>
+        /* ── Immersive Full-Bleed Dashboard ── */
+        <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
 
-          {/* LEFT: 3D Asset & Topology */}
-          <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <TopologyPanel activeDataset={activeDataset} scoreComponents={scoreComponents} alertExplanation={alertExplanation} systemState={systemState} />
-          </div>
+          {/* ── Visual Loading Overlay (masks 3D model load and auto-clicks) ── */}
+          <AnimatePresence>
+            {isModelLoading && (
+              <motion.div
+                initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                animate={{ opacity: 1, backdropFilter: 'blur(20px)' }}
+                exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+                transition={{ duration: 0.4 }}
+                style={{
+                  position: 'absolute', inset: 0, zIndex: 100,
+                  background: 'rgba(10, 9, 7, 0.75)',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  gap: 20
+                }}
+              >
+                <div className="animate-spin" style={{
+                  width: 50, height: 50, borderRadius: '50%',
+                  border: '3px solid rgba(212, 168, 83, 0.2)',
+                  borderTopColor: 'var(--gold)'
+                }} />
+                <div className="animate-pulse" style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 13,
+                  fontWeight: 700, letterSpacing: '0.2em', color: 'var(--gold)'
+                }}>
+                  INITIALIZING SECURE 3D FEED...
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {/* CENTER: Charts */}
-          <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ flex: '0 0 45%', minHeight: 0 }}>
+          {/* ── Layer 0: Full-bleed interactive 3D background ── */}
+          <BackgroundViewer 
+            activeDataset={activeDataset} 
+            topSensor={alertExplanation?.top_contributors?.[0]?.sensor ?? null} 
+          />
+
+          {/* ── Layer 1: Edge-aligned HUD overlay (Center stays completely clear!) ── */}
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 5,
+            display: 'flex', justifyContent: 'space-between',
+            padding: '16px', gap: '20px',
+            pointerEvents: 'none',
+          }}>
+
+            {/* TOP CENTER BANNER: Fused Anomaly Score */}
+            <div style={{
+              position: 'absolute', top: 16, left: 380 + 36, right: 380 + 36,
+              height: 160, pointerEvents: 'auto', display: 'flex', flexDirection: 'column'
+            }} className="glass-hud">
               <HeroSection data={data} systemState={systemState} dimensions={dimensions} />
             </div>
-            <div style={{ flex: 1, minHeight: 0 }}>
-              <ResidualSection data={data} dimensions={dimensions} activeDataset={activeDataset} hotSensors={hotSensors} sensorLabels={sensorLabels} />
-            </div>
-          </div>
 
-          {/* RIGHT: Incident & Governance */}
-          <div style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'hidden' }}>
-            <PredictiveRULPanel alertExplanation={alertExplanation} activeDataset={activeDataset} />
-            <RootCausePanel alertExplanation={alertExplanation} />
-            <SimilarIncidents alertExplanation={alertExplanation} />
-            {revenueLoss && (activeDataset === 'solar_synthetic' || activeDataset === 'wind_synthetic') && (
-              <div className="panel" style={{ flexShrink: 0, padding: '10px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                  <span className="section-label" style={{ color: revenueLoss.anomaly_active ? 'var(--crimson)' : 'var(--gold)' }}>REVENUE IMPACT</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div className="panel-recessed" style={{ padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 7, color: 'var(--text-dim)', letterSpacing: '0.15em', marginBottom: 4 }}>ENERGY LOSS</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: revenueLoss.cumulative_energy_loss_kwh > 0 ? 'var(--copper)' : 'var(--text-secondary)' }}>
-                      {Number(revenueLoss.cumulative_energy_loss_kwh || 0).toFixed(4)} kWh
-                    </div>
-                  </div>
-                  <div className="panel-recessed" style={{ padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 7, color: 'var(--text-dim)', letterSpacing: '0.15em', marginBottom: 4 }}>REVENUE LOSS</div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: revenueLoss.cumulative_revenue_loss_usd > 0 ? 'var(--crimson)' : 'var(--text-secondary)' }}>
-                      ${Number(revenueLoss.cumulative_revenue_loss_usd || 0).toFixed(4)}
-                    </div>
-                  </div>
-                </div>
-                {revenueLoss.anomaly_active && (
-                  <div style={{ marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--crimson)', textAlign: 'center' }}>
-                    ACTIVE DEFICIT: -{Number(revenueLoss.current_deficit_rate_kw || 0).toFixed(2)} kW
-                  </div>
-                )}
+            {/* LEFT COLUMN: Diagnostics & Data */}
+            <div style={{ width: '380px', pointerEvents: 'auto', display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
+              
+              {/* Tab Toggle */}
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button 
+                  onClick={() => setActiveLeftTab('diagnostics')}
+                  style={{
+                    flex: 1, padding: '10px 0', border: '1px solid', borderRadius: 4, cursor: 'pointer',
+                    background: activeLeftTab === 'diagnostics' ? 'rgba(212,168,83,0.15)' : 'rgba(10,9,7,0.6)',
+                    borderColor: activeLeftTab === 'diagnostics' ? 'rgba(212,168,83,0.5)' : 'rgba(184,134,42,0.2)',
+                    color: activeLeftTab === 'diagnostics' ? 'var(--gold)' : 'var(--text-dim)',
+                    fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+                    transition: 'all 0.2s ease', backdropFilter: 'blur(10px)'
+                  }}
+                >
+                  DIAGNOSTICS HUD
+                </button>
+                <button 
+                  onClick={() => setActiveLeftTab('residuals')}
+                  style={{
+                    flex: 1, padding: '10px 0', border: '1px solid', borderRadius: 4, cursor: 'pointer',
+                    background: activeLeftTab === 'residuals' ? 'rgba(212,168,83,0.15)' : 'rgba(10,9,7,0.6)',
+                    borderColor: activeLeftTab === 'residuals' ? 'rgba(212,168,83,0.5)' : 'rgba(184,134,42,0.2)',
+                    color: activeLeftTab === 'residuals' ? 'var(--gold)' : 'var(--text-dim)',
+                    fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+                    transition: 'all 0.2s ease', backdropFilter: 'blur(10px)'
+                  }}
+                >
+                  SENSOR RESIDUALS
+                </button>
               </div>
-            )}
-            <GovernancePanel
-              systemState={systemState}
-              isSubmitting={isSubmittingFeedback}
-              feedbackStatus={feedbackStatus}
-              onAcknowledge={acknowledgeAlert}
-              onDismiss={dismissAlarm}
-              modelVersion={modelVersion}
-              retrainRecommended={retrainRecommended}
-              onManualRetrain={triggerManualRetrain}
-              onTriggerAnomaly={triggerManualAnomaly}
-            />
-          </div>
 
+              {activeLeftTab === 'diagnostics' ? (
+                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }} className="glass-hud">
+                  <LeftHud
+                    activeDataset={activeDataset}
+                    scoreComponents={scoreComponents}
+                    alertExplanation={alertExplanation}
+                    data={data}
+                    dimensions={dimensions}
+                    sensorLabels={sensorLabels}
+                    systemState={systemState}
+                  />
+                </div>
+              ) : (
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }} className="glass-hud">
+                  <ResidualSection data={data} dimensions={dimensions} activeDataset={activeDataset} hotSensors={hotSensors} sensorLabels={sensorLabels} />
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN: Intelligence & Governance */}
+            <div style={{ width: '380px', pointerEvents: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, overflow: 'hidden' }} className="glass-hud">
+                <RightHud
+                  alertExplanation={alertExplanation}
+                  activeDataset={activeDataset}
+                  systemState={systemState}
+                  revenueLoss={revenueLoss}
+                  isSubmittingFeedback={isSubmittingFeedback}
+                  feedbackStatus={feedbackStatus}
+                  onAcknowledge={acknowledgeAlert}
+                  onDismiss={dismissAlarm}
+                  modelVersion={modelVersion}
+                  retrainRecommended={retrainRecommended}
+                  onManualRetrain={triggerManualRetrain}
+                  onTriggerAnomaly={triggerManualAnomaly}
+                />
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 

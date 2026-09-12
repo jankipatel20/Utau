@@ -61,58 +61,7 @@ function fadeTo(scene: THREE.Group, targetOpacity: number, duration = 1.0) {
 }
 
 
-// ── Independent Component Normalizer ──────────────────────────────────────────
-// Fault components (Gearbox, Generator, Bearing) are independent 3D models.
-// They need to be scaled to a uniform size (e.g. 2.5 units) and centered.
-function NormalizedFaultModel({ scene, isActive, positionX }: { scene: THREE.Group, isActive: boolean, positionX: number }) {
-  const clone = useMemo(() => {
-    const c = cloneSceneWithTransparency(scene, 0, false);
-    
-    // Force compute geometry bounds just to be safe
-    c.traverse(obj => {
-      if ((obj as THREE.Mesh).isMesh && (obj as THREE.Mesh).geometry) {
-        (obj as THREE.Mesh).geometry.computeBoundingBox();
-      }
-    });
-
-    // 1. Calculate the raw bounding box
-    const box = new THREE.Box3().setFromObject(c);
-    if (!box.isEmpty()) {
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      
-      // 2. Scale it so its maximum dimension is exactly 2.5 units
-      const max = Math.max(size.x, size.y, size.z) || 1;
-      c.scale.setScalar(2.5 / max);
-      
-      // 3. Center the model's pivot point mathematically
-      const box2 = new THREE.Box3().setFromObject(c);
-      const center = new THREE.Vector3();
-      box2.getCenter(center);
-      c.position.sub(center); // shifts the model so its center is exactly at [0,0,0]
-    }
-    return c;
-  }, [scene]);
-
-  // Handle fading in/out
-  useEffect(() => {
-    fadeTo(clone, isActive ? 1 : 0, 1.0);
-  }, [isActive, clone]);
-
-  return (
-    // Position at nacelle height (Y=14.8)
-    <group position={[positionX, 14.8, 0]}>
-      <primitive object={clone} />
-      {/* Cool red ring effect under the component when active */}
-      {isActive && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.2, 0]}>
-          <ringGeometry args={[1.5, 1.8, 32]} />
-          <meshBasicMaterial color="#ff2200" transparent opacity={0.6} side={THREE.DoubleSide} />
-        </mesh>
-      )}
-    </group>
-  );
-}
+// (NormalizedFaultModel removed to prevent loading extra models)
 
 // ── Main Viewer ───────────────────────────────────────────────────────────────
 export default function TurbineViewer({ activeAnomaly }: Props) {
@@ -122,9 +71,6 @@ export default function TurbineViewer({ activeAnomaly }: Props) {
   // Load RAW scenes
   const { scene: rawExt }  = useGLTF("/src/assets/Turbine_Exterior.glb");
   const { scene: rawNac }  = useGLTF("/src/assets/Nacelle_Shell.glb");
-  const { scene: rawGear } = useGLTF("/src/assets/Gearbox.glb");
-  const { scene: rawGen }  = useGLTF("/src/assets/Generator.glb");
-  const { scene: rawBear } = useGLTF("/src/assets/Bearing.glb");
 
   // Create clones for the massive main turbine
   const extScene = useMemo(() => cloneSceneWithTransparency(rawExt as THREE.Group, 1, true), [rawExt]);
@@ -135,9 +81,9 @@ export default function TurbineViewer({ activeAnomaly }: Props) {
 
   // Set initial camera position
   useEffect(() => {
-    camera.position.set(0, 5, 15);
+    camera.position.set(0, 10.5, 22);
     if (orbitRef.current) {
-      orbitRef.current.target.set(0, 5, 0);
+      orbitRef.current.target.set(0, 10.5, 0);
       orbitRef.current.update();
     }
   }, [camera]);
@@ -149,10 +95,10 @@ export default function TurbineViewer({ activeAnomaly }: Props) {
       fadeTo(extScene, 1, 1.2);
       fadeTo(nacScene, 0, 1.2);
 
-      gsap.to(camera.position, { x: 0, y: 5, z: 15, duration: 2, ease: "power2.inOut" });
+      gsap.to(camera.position, { x: 0, y: 10.5, z: 22, duration: 2, ease: "power2.inOut" });
       if (orbitRef.current) {
         gsap.to(orbitRef.current.target, { 
-          x: 0, y: 5, z: 0, 
+          x: 0, y: 10.5, z: 0, 
           duration: 2, ease: "power2.inOut",
           onUpdate: () => orbitRef.current?.update()
         });
@@ -162,17 +108,21 @@ export default function TurbineViewer({ activeAnomaly }: Props) {
       fadeTo(extScene, 0, 1.0);
       fadeTo(nacScene, 1, 1.0);
 
-      // The top of the tower (nacelle) is roughly at Y = TARGET_HEIGHT (15 units)
-      const targetY = TARGET_HEIGHT;
+      // The models are positioned at Y = 4.0
+      const targetY = 4.0;
       
       // Specific camera targeting to look directly at the loaded component
       const targetLookX = shown === "gearbox" ? -1 : shown === "generator" ? 1 : 0;
       const targetCamX = shown === "gearbox" ? -3 : shown === "generator" ? 3 : 0;
 
-      gsap.to(camera.position, { x: targetCamX, y: targetY + 1.5, z: 10, duration: 2.5, ease: "power3.inOut" });
+      // By pointing the camera slightly ABOVE the component, the component renders lower on the screen.
+      const lookAtY = targetY + 1.5;
+      const camY = lookAtY + 1.5;
+
+      gsap.to(camera.position, { x: targetCamX, y: camY, z: 11, duration: 2.5, ease: "power3.inOut" });
       if (orbitRef.current) {
         gsap.to(orbitRef.current.target, { 
-          x: targetLookX, y: targetY, z: 0, 
+          x: targetLookX, y: lookAtY, z: 0, 
           duration: 2.5, ease: "power3.inOut",
           onUpdate: () => orbitRef.current?.update()
         });
@@ -203,11 +153,6 @@ export default function TurbineViewer({ activeAnomaly }: Props) {
         <primitive object={nacScene} />
       </group>
 
-      {/* Isolated Internal Components */}
-      <NormalizedFaultModel scene={rawGear as THREE.Group} isActive={shown === "gearbox"} positionX={-1} />
-      <NormalizedFaultModel scene={rawGen as THREE.Group} isActive={shown === "generator"} positionX={1} />
-      <NormalizedFaultModel scene={rawBear as THREE.Group} isActive={shown === "bearing"} positionX={0} />
-
       {/* Grid Floor */}
       <gridHelper args={[60, 60, "#443311", "#221a08"]} position={[0, -0.05, 0]} />
     </>
@@ -216,6 +161,3 @@ export default function TurbineViewer({ activeAnomaly }: Props) {
 
 useGLTF.preload("/src/assets/Turbine_Exterior.glb");
 useGLTF.preload("/src/assets/Nacelle_Shell.glb");
-useGLTF.preload("/src/assets/Gearbox.glb");
-useGLTF.preload("/src/assets/Generator.glb");
-useGLTF.preload("/src/assets/Bearing.glb");
