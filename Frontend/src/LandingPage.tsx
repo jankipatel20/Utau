@@ -93,14 +93,14 @@ function GlobalStyles() {
 
 /* ── TICKER DATA ── */
 const TICKER_ITEMS = [
-  { dot: 'green', text: 'SUBSYSTEM A', val: '99.97%', unit: 'UPTIME' },
-  { dot: 'amber', text: 'THERMAL NODE 12', val: '+2.4°C', unit: 'DRIFT' },
+  { dot: 'green', text: 'SOLAR ARRAY ALPHA', val: '99.8%', unit: 'EFFICIENCY' },
+  { dot: 'amber', text: 'INVERTER TH-12', val: '+2.4°C', unit: 'DRIFT' },
   { dot: 'green', text: 'KAFKA INGEST', val: '48,291', unit: 'MSG/S' },
-  { dot: 'green', text: 'FORECAST ACCURACY', val: '98.3%', unit: '' },
-  { dot: 'red', text: 'ANOMALY THRESHOLD BREACH — SECTOR 7 — ROLLBACK INITIATED', val: '', unit: '' },
-  { dot: 'green', text: 'INFLUXDB WRITE LATENCY', val: '0.4ms', unit: '' },
-  { dot: 'green', text: 'RL POLICY UPDATE', val: 'CYCLE 1,847', unit: '' },
-  { dot: 'amber', text: 'VIBRATION SENSOR V-04', val: 'RECALIBRATING', unit: '' },
+  { dot: 'green', text: 'PREDICTION CONFIDENCE', val: '98.9%', unit: '' },
+  { dot: 'red', text: 'CRITICAL: GEARBOX VIBRATION BREACH — WIND TURBINE W-07 — MITIGATION PROTOCOL ACTIVE', val: '', unit: '' },
+  { dot: 'green', text: 'REVENUE LOSS PREVENTED', val: '$14,280', unit: 'YTD' },
+  { dot: 'green', text: 'AI POLICY UPDATE', val: 'CYCLE 1,847', unit: '' },
+  { dot: 'amber', text: 'PANEL SOILING DETECTED', val: 'SECTOR 4', unit: '' },
 ];
 
 const dotColors = {
@@ -153,7 +153,7 @@ function Nav({ onLaunch }) {
           <div className="logo-icon-inner" style={{ width: 12, height: 12, background: 'var(--gold)' }} />
         </div>
         <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, letterSpacing: '0.2em', color: 'var(--text)' }}>
-          UTAU<span style={{ color: 'var(--gold)' }}>-IIoT</span>
+          UTAU<span style={{ color: 'var(--gold)' }}></span>
         </span>
       </div>
 
@@ -272,8 +272,8 @@ function Hero({ onLaunch }) {
         </div>
 
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(72px, 8vw, 108px)', lineHeight: 0.9, letterSpacing: '0.02em', color: 'var(--text)', marginBottom: 12 }}>
-          SELF-HEALING<br />
-          <span style={{ color: 'var(--gold)' }}>INDUSTRIAL</span><br />
+          AUTONOMOUS<br />
+          <span style={{ color: 'var(--gold)' }}>RENEWABLE</span><br />
           <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: 'clamp(52px, 5.5vw, 72px)', fontWeight: 400, color: 'var(--text-muted)', letterSpacing: '0.01em', display: 'block' }}>
             intelligence.
           </span>
@@ -282,7 +282,7 @@ function Hero({ onLaunch }) {
         <div style={{ width: 80, height: 1, background: 'linear-gradient(90deg, var(--gold), transparent)', margin: '32px 0' }} />
 
         <p style={{ fontFamily: 'var(--font-serif)', fontSize: 17, lineHeight: 1.7, color: 'var(--text-muted)', maxWidth: 460, marginBottom: 48 }}>
-          Continuous multi-signal forecasting for critical industrial telemetry. Utau-IIoT isolates structural degradation and executes autonomic canary rollbacks before infrastructure fails.
+          Eliminate unplanned downtime for Solar & Wind assets. UTAU fuses high-dimensional telemetry with deep learning to predict structural degradation and quantify revenue-at-risk before infrastructure fails.
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
@@ -320,10 +320,10 @@ function Hero({ onLaunch }) {
 
 /* ── STATS BAR ── */
 const STATS = [
-  { idx: '01', val: '99', suffix: '.97%', label: 'System Uptime SLA', delta: '+0.02%' },
-  { idx: '02', val: '0.4', suffix: 'ms', label: 'Mean Ingest Latency', delta: null },
-  { idx: '03', val: '48', suffix: 'K/s', label: 'Peak Telemetry Throughput', delta: '+12%' },
-  { idx: '04', val: '1', suffix: 'ms', label: 'Anomaly Detection TTD', delta: null },
+  { idx: '01', val: '14', suffix: '.2K', label: 'Revenue Loss Mitigated', delta: '+2.4K' },
+  { idx: '02', val: '98', suffix: '.9%', label: 'Anomaly Prediction Acc.', delta: '+1.2%' },
+  { idx: '03', val: '48', suffix: 'K/s', label: 'Telemetry Throughput', delta: null },
+  { idx: '04', val: '0.4', suffix: 'ms', label: 'AI Inference Latency', delta: '-0.1ms' },
 ];
 
 function StatsBar() {
@@ -372,19 +372,19 @@ const ARCH_CARDS = [
     num: '01', labelClass: 'gold', label: 'INGEST LAYER',
     pipeline: ['KAFKA', 'INFLUXDB', 'REDIS'],
     title: 'STREAMING\nINGEST ENGINE',
-    desc: 'Zero-latency event bus ingesting highly concurrent multi-dimensional telemetry feeds from critical edge nodes across distributed infrastructure.',
+    desc: 'Zero-latency event bus ingesting highly concurrent multi-dimensional telemetry feeds directly from distributed solar arrays and wind turbines.',
   },
   {
     num: '02', labelClass: 'red', label: 'INTELLIGENCE LAYER',
     pipeline: ['RECON', 'FORECAST', 'CORRELATE'],
     title: 'STP-TranAD\nFORECASTING',
-    desc: 'Tri-metric contextual modeling isolates anomalous structural degradation across interdependent sub-systems with 98.3% detection accuracy.',
+    desc: 'Tri-metric contextual modeling isolates structural degradation (e.g., gearbox wear, panel soiling) leveraging environment-aware contextual features.',
   },
   {
     num: '03', labelClass: 'copper', label: 'GOVERNANCE LAYER',
-    pipeline: ['RL POLICY', 'CANARY', 'ROLLBACK'],
-    title: 'AUTONOMIC\nGOVERNANCE',
-    desc: 'Closed-loop feedback control implementing immediate mitigation workflows when threat confidence exceeds defined operational thresholds.',
+    pipeline: ['RL POLICY', 'CANARY', 'MITIGATE'],
+    title: 'AUTONOMIC\nPRIORITIZATION',
+    desc: 'Dynamic fleet-level prioritization and closed-loop feedback instantly ranks at-risk assets based on anomaly severity and revenue-at-risk.',
   },
 ];
 
@@ -460,9 +460,8 @@ function SignalChart() {
     dataRef.current = genSignal();
 
     // Dynamically load Chart.js
-    const existingScript = document.querySelector('script[data-chartjs]');
-    const load = (cb) => {
-      if (window.Chart) { cb(); return; }
+    const load = (cb: () => void) => {
+      if ((window as any).Chart) { cb(); return; }
       const s = document.createElement('script');
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
       s.setAttribute('data-chartjs', '1');
@@ -473,7 +472,7 @@ function SignalChart() {
     load(() => {
       if (!canvasRef.current) return;
       const ctx = canvasRef.current.getContext('2d');
-      chartRef.current = new window.Chart(ctx, {
+      chartRef.current = new (window as any).Chart(ctx, {
         type: 'line',
         data: {
           labels: Array.from({ length: NUM }, (_, i) => i),
@@ -539,7 +538,7 @@ function SignalChart() {
   return (
     <div style={{ border: '1px solid var(--border)', background: 'var(--bg)', padding: 32, position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>VIBRATION SPECTRUM — COMPRESSOR UNIT C-07</span>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.15em', color: 'var(--text-muted)' }}>VIBRATION SPECTRUM — WIND TURBINE W-07</span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 9, fontWeight: 600, letterSpacing: '0.15em', color: '#27AE60' }}>
           <span className="live-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: '#27AE60', boxShadow: '0 0 6px #27AE60', display: 'inline-block' }} />
           LIVE FEED
@@ -565,23 +564,23 @@ function SignalChart() {
 const ALERTS = [
   {
     sev: 'critical', badge: 'CRITICAL', time: '00:42:17',
-    title: 'Resonance Frequency Breach',
-    desc: 'Sector 7 — Compressor C-07 shows 3σ deviation from baseline spectral signature.',
+    title: 'Gearbox Wear Progression',
+    desc: 'Wind Turbine W-07 shows 3σ deviation in vibration signature independent of wind speed load.',
     metricVal: '847', metricUnit: 'Hz', metricLabel: 'PEAK FREQUENCY',
-    action: 'ROLLBACK ↗', actionNote: 'CANARY ACTIVE',
+    action: 'DISPATCH TECH ↗', actionNote: 'EST. LOSS $120/hr',
   },
   {
     sev: 'warning', badge: 'WARNING', time: '00:38:52',
-    title: 'Thermal Drift Detected',
-    desc: 'Node TH-12 reporting +2.4°C above projected thermal envelope model.',
+    title: 'Panel Hotspot Detected',
+    desc: 'Solar Array S-12 reporting +2.4°C above expected irradiance-adjusted thermal envelope.',
     metricVal: '+2.4', metricUnit: '°C', metricLabel: 'DELTA TEMP',
-    action: 'MONITORING', actionNote: 'THRESHOLD 3.0°C',
+    action: 'MONITORING', actionNote: 'EFFICIENCY -4.2%',
   },
   {
     sev: 'nominal', badge: 'NOMINAL', time: '00:35:00',
-    title: 'Pressure Subsystem P-02',
-    desc: 'All sensors within operational envelope. RL policy stable at cycle 1,847.',
-    metricVal: '99.97', metricUnit: '%', metricLabel: 'HEALTH SCORE',
+    title: 'Inverter String I-02',
+    desc: 'All output metrics aligned with weather context. Model baseline stable.',
+    metricVal: '99.9', metricUnit: '%', metricLabel: 'EXPECTED YIELD',
     action: null, actionNote: null,
   },
 ];
@@ -690,7 +689,7 @@ function BottomBar() {
       borderTop: '1px solid var(--border-light)',
       background: 'var(--bg-panel)',
     }}>
-      <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>© 2026 UTAU-IIOT SYSTEMS. ALL RIGHTS RESERVED.</div>
+      <div style={{ fontSize: 9, color: 'var(--text-dim)', letterSpacing: '0.1em' }}>© 2026 UTAU SYSTEMS. ALL RIGHTS RESERVED.</div>
       <div style={{ display: 'flex', gap: 24 }}>
         {['PRIVACY', 'SECURITY', 'COMPLIANCE', 'STATUS'].map(l => (
           <a key={l} href="#" style={{ fontSize: 9, color: 'var(--text-dim)', textDecoration: 'none', letterSpacing: '0.1em' }}

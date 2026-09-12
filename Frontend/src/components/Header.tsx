@@ -52,10 +52,10 @@ export function UtauHeader({
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 22, letterSpacing: '0.2em', color: '#F0EBE0', lineHeight: 1 }}>
-            UTAU<span style={{ color: 'var(--gold)' }}>-IIoT</span>
+            UTAU
           </div>
           <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 8, fontWeight: 500, color: '#A09D94', letterSpacing: '0.35em', lineHeight: 1 }}>
-            COMMAND CENTER
+            RENEWABLE ENERGY HUB
           </div>
         </div>
       </button>

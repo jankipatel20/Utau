@@ -426,13 +426,9 @@ const UI_UPDATE_INTERVAL_MS = 350;
 const MAX_CHART_POINTS = 30;
 
 const DATASET_TABS = [
-  { label: 'SMD',       value: 'SMD'       },
-  { label: 'MSL',       value: 'MSL'       },
-  { label: 'SMAP',      value: 'SMAP'      },
-  { label: 'ESP32',     value: 'ESP32'     },
-  { label: 'Synthetic', value: 'synthetic' },
-  { label: 'Solar',     value: 'solar_synthetic' },
-  { label: 'Wind',      value: 'wind_synthetic'  },
+  { label: '☀  SOLAR ARRAY',  value: 'solar_synthetic' },
+  { label: '💨 WIND FARM',    value: 'wind_synthetic'  },
+  { label: 'GENERIC',         value: 'synthetic'       },
 ];
 
 const featureFlag = (value: unknown, defaultValue = false): boolean => {
@@ -449,7 +445,7 @@ export default function App() {
   const [isConnected,           setIsConnected]           = useState(false);
   const [systemState,           setSystemState]           = useState<'HEALTHY' | 'WARNING' | 'CRITICAL'>('HEALTHY');
   const [dimensions,            setDimensions]            = useState<number>(0);
-  const [activeDataset,         setActiveDataset]         = useState('SMD');
+  const [activeDataset,         setActiveDataset]         = useState('solar_synthetic');
   const [isTransitioning,       setIsTransitioning]       = useState(false);
   const [alertExplanation,      setAlertExplanation]      = useState<AlertExplanation | null>(null);
   const [anomalySource,         setAnomalySource]         = useState<any | null>(null);
@@ -489,8 +485,8 @@ export default function App() {
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/status');
-        if (!res.ok) return;
+        const res = await fetch(`http://127.0.0.1:8000/status?dataset=${activeDataset}`);
+        if (!res.ok) throw new Error("Network response was not ok");
         const status = await res.json();
         // model_version key lives in model_registry inside the status payload
         if (status.model_version && status.model_version !== modelVersion) {
@@ -530,7 +526,7 @@ export default function App() {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       doc.setFontSize(22);
       doc.setTextColor(40, 40, 40);
-      doc.text("UTAU-IIoT Operational Threat Report", 14, 22);
+      doc.text("UTAU Renewable Energy — Asset Health Report", 14, 22);
       doc.setFontSize(11);
       doc.setTextColor(100, 100, 100);
       doc.text(`Active Dataset: ${activeDataset.toUpperCase()}`, 14, 30);
@@ -631,7 +627,19 @@ export default function App() {
           forecast: forecastArr,
         };
 
-        if (payload.alert_explanation) setAlertExplanation(payload.alert_explanation);
+        if (payload.alert_explanation) {
+          if (payload.alert_explanation.manual_trigger) {
+            const isSolar = activeDatasetRef.current === "solar_synthetic";
+            const testSensors = isSolar ? ["s7", "s6", "s0"] : ["s3", "s10", "s6"]; // Solar: Inverter, Panel, JBox. Wind: Gearbox, Bearing, Generator
+            const randomSensor = testSensors[Math.floor(Math.random() * testSensors.length)];
+            if (payload.alert_explanation.top_contributors?.length > 0) {
+              payload.alert_explanation.top_contributors[0].sensor = randomSensor;
+            } else {
+              payload.alert_explanation.top_contributors = [{ sensor: randomSensor, contribution_score: 99.9 }];
+            }
+          }
+          setAlertExplanation(payload.alert_explanation);
+        }
         if (payload.anomaly_source) setAnomalySource(payload.anomaly_source);
         if (payload.score_components) setScoreComponents(payload.score_components);
         if (payload.revenue_loss) setRevenueLoss(payload.revenue_loss);
