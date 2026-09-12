@@ -58,49 +58,7 @@ function fadeTo(scene: THREE.Group, targetOpacity: number, duration = 1.0) {
   });
 }
 
-// ── Independent Component Normalizer ──────────────────────────────────────────
-function NormalizedFaultModel({ scene, isActive, positionX }: { scene: THREE.Group, isActive: boolean, positionX: number }) {
-  const clone = useMemo(() => {
-    const c = cloneSceneWithTransparency(scene, 0, false);
-    
-    c.traverse(obj => {
-      if ((obj as THREE.Mesh).isMesh && (obj as THREE.Mesh).geometry) {
-        (obj as THREE.Mesh).geometry.computeBoundingBox();
-      }
-    });
-
-    const box = new THREE.Box3().setFromObject(c);
-    if (!box.isEmpty()) {
-      const size = new THREE.Vector3();
-      box.getSize(size);
-      
-      const max = Math.max(size.x, size.y, size.z) || 1;
-      c.scale.setScalar(2.5 / max);
-      
-      const box2 = new THREE.Box3().setFromObject(c);
-      const center = new THREE.Vector3();
-      box2.getCenter(center);
-      c.position.sub(center); 
-    }
-    return c;
-  }, [scene]);
-
-  useEffect(() => {
-    fadeTo(clone, isActive ? 1 : 0, 1.0);
-  }, [isActive, clone]);
-
-  return (
-    <group position={[positionX, FAULT_HEIGHT, 0]}>
-      <primitive object={clone} />
-      {isActive && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.2, 0]}>
-          <ringGeometry args={[1.5, 1.8, 32]} />
-          <meshBasicMaterial color="#ff2200" transparent opacity={0.6} side={THREE.DoubleSide} />
-        </mesh>
-      )}
-    </group>
-  );
-}
+// (NormalizedFaultModel removed to prevent loading extra models)
 
 // ── Main Viewer ───────────────────────────────────────────────────────────────
 export default function SolarViewer({ activeAnomaly }: Props) {
@@ -109,16 +67,13 @@ export default function SolarViewer({ activeAnomaly }: Props) {
 
   // Load RAW scenes
   const { scene: rawExt }  = useGLTF("/src/assets/solar_array_exterior.glb");
-  const { scene: rawPanel } = useGLTF("/src/assets/solar_panel_cutaway.glb");
-  const { scene: rawInv }  = useGLTF("/src/assets/inverter.glb");
-  const { scene: rawJbox } = useGLTF("/src/assets/junction_box.glb");
 
   const extScene = useMemo(() => cloneSceneWithTransparency(rawExt as THREE.Group, 1, true), [rawExt]);
 
   const shown = activeAnomaly;
 
   useEffect(() => {
-    camera.position.set(0, 2.5, 5);
+    camera.position.set(0, 6, 12);
     if (orbitRef.current) {
       orbitRef.current.target.set(0, 0.5, 0);
       orbitRef.current.update();
@@ -130,7 +85,7 @@ export default function SolarViewer({ activeAnomaly }: Props) {
     if (shown === null) {
       fadeTo(extScene, 1, 1.2);
 
-      gsap.to(camera.position, { x: 0, y: 2.5, z: 5, duration: 2, ease: "power2.inOut" });
+      gsap.to(camera.position, { x: 0, y: 6, z: 12, duration: 2, ease: "power2.inOut" });
       if (orbitRef.current) {
         gsap.to(orbitRef.current.target, { 
           x: 0, y: 0.5, z: 0, 
@@ -139,8 +94,8 @@ export default function SolarViewer({ activeAnomaly }: Props) {
         });
       }
     } else {
-      // Keep the solar farm visible as a ghosted background instead of disappearing completely
-      fadeTo(extScene, 0.15, 1.0);
+      // Keep the solar farm fully visible since we removed the extra fault models
+      fadeTo(extScene, 1.0, 1.0);
       
       const targetLookX = shown === "panel" ? -2 : shown === "inverter" ? 2 : 0;
       const targetCamX = shown === "panel" ? -4 : shown === "inverter" ? 4 : 0;
@@ -178,11 +133,6 @@ export default function SolarViewer({ activeAnomaly }: Props) {
         <primitive object={extScene} />
       </group>
 
-      {/* Isolated Internal Components */}
-      <NormalizedFaultModel scene={rawPanel as THREE.Group} isActive={shown === "panel"} positionX={-2} />
-      <NormalizedFaultModel scene={rawInv as THREE.Group} isActive={shown === "inverter"} positionX={2} />
-      <NormalizedFaultModel scene={rawJbox as THREE.Group} isActive={shown === "junction_box"} positionX={0} />
-
       {/* Grid Floor */}
       <gridHelper args={[60, 60, "#443311", "#221a08"]} position={[0, -0.05, 0]} />
     </>
@@ -190,6 +140,3 @@ export default function SolarViewer({ activeAnomaly }: Props) {
 }
 
 useGLTF.preload("/src/assets/solar_array_exterior.glb");
-useGLTF.preload("/src/assets/solar_panel_cutaway.glb");
-useGLTF.preload("/src/assets/inverter.glb");
-useGLTF.preload("/src/assets/junction_box.glb");

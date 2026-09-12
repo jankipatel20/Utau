@@ -41,7 +41,7 @@ export function HeroSection({ data, systemState, dimensions }: { data: any[]; sy
           </div>
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, left: -22, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(212,168,83,0.08)" vertical={false} />
@@ -82,7 +82,7 @@ export function ResidualSection({ data, dimensions, hotSensors, sensorLabels }: 
               <div style={{ fontFamily: "'Cinzel', serif", fontSize: 7, color: isHot ? CR : TD, letterSpacing: '0.10em', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={sensorLabels?.[i] || `S${String(i).padStart(2, '0')}`}>
                 {sensorLabels?.[i] || `S${String(i).padStart(2, '0')}`}
               </div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minHeight: 0, minWidth: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={data}>
                     <YAxis yAxisId="a" hide domain={['auto', 'auto']} />
