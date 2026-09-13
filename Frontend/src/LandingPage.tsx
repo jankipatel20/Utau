@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 
 const GOLD = '#C9922A';
@@ -88,6 +88,7 @@ const GLOBAL_CSS = `
   .fade-in.visible { opacity: 1; transform: translateY(0); }
   .blink-cursor { animation: blink 1s step-end infinite; }
   .glass-card { background: rgba(28,26,23,0.5); backdrop-filter: blur(12px); border: 1px solid rgba(201,146,42,0.15); border-radius: 8px; }
+  @keyframes turbineSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 `;
 
 function GlobalStyles() {
@@ -198,68 +199,459 @@ function Nav({ onLaunch }) {
   );
 }
 
-/* ── VISUAL CORE ── */
-function VisualCore() {
-  const [coreVal, setCoreVal] = useState('98.3');
+/* ── HERO CANVAS BACKGROUND ── */
+function HeroCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<number>(0);
+  const stateRef = useRef({ rot: 0, t: 0 });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const prefersRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const dpr = window.devicePixelRatio || 1;
+
+    const resize = () => {
+      const w = canvas.offsetWidth, h = canvas.offsetHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    const isMob = canvas.offsetWidth < 640;
+    const N = isMob ? 650 : 1100;
+    const GA = Math.PI * (3 - Math.sqrt(5));
+    const pts = Array.from({ length: N }, (_, i) => {
+      const y = 1 - (i / (N - 1)) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const th = GA * i;
+      return {
+        nx: Math.cos(th) * r, ny: y, nz: Math.sin(th) * r,
+        sz: 0.5 + Math.random() * 1.2,
+        op: 0.18 + Math.random() * 0.52,
+        gold: Math.random() < 0.11,
+      };
+    });
+
+    const stars = Array.from({ length: 175 }, () => ({
+      x: Math.random(), y: Math.random(),
+      sz: 0.4 + Math.random() * 1.8,
+      op: 0.04 + Math.random() * 0.28,
+      ph: Math.random() * Math.PI * 2,
+      sp: 0.3 + Math.random() * 0.6,
+    }));
+
+    const N_T = 30;
+    const trails = Array.from({ length: N_T }, (_, i) => ({
+      // origin scattered across the whole hero width/height, not just bottom-center
+      originX: 0.08 + Math.random() * 0.84,
+      originY: 0.55 + Math.random() * 0.55,
+      spread: (Math.random() - 0.5) * 2.6,
+      len: 160 + Math.random() * 340,
+      curve: (Math.random() - 0.5) * 220,
+      speed: 0.4 + Math.random() * 1.1,
+      dashOff: Math.random() * 600,
+      gold: Math.random() < 0.22,
+      lw: 0.6 + Math.random() * 0.7,
+    }));
+
+    let visible = true;
+    const onVis = () => { visible = !document.hidden; };
+    document.addEventListener('visibilitychange', onVis);
+
+    const draw = () => {
+      animRef.current = requestAnimationFrame(draw);
+      if (!visible) return;
+      const w = canvas.offsetWidth, h = canvas.offsetHeight;
+      ctx.clearRect(0, 0, w, h);
+      if (!prefersRM) {
+        stateRef.current.t += 0.01;
+        stateRef.current.rot += (2 * Math.PI) / (75 * 60);
+      }
+      const { t, rot } = stateRef.current;
+      const cosR = Math.cos(rot), sinR = Math.sin(rot);
+
+      // STARS
+      stars.forEach(s => {
+        const tw = 0.6 + 0.4 * Math.sin(t * s.sp + s.ph);
+        ctx.beginPath();
+        ctx.arc(s.x * w, s.y * h, s.sz, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(240,235,224,${s.op * tw})`;
+        ctx.fill();
+      });
+
+      // COMET TRAILS — each has its own scattered origin so they cover the entire hero
+      trails.forEach(trail => {
+        if (!prefersRM) trail.dashOff -= trail.speed * 2;
+        const ox = w * trail.originX, oy = h * trail.originY;
+        const ex = ox + Math.sin(trail.spread) * trail.len;
+        const ey = oy - Math.cos(trail.spread) * trail.len * 0.85;
+        const cpx = ox + Math.sin(trail.spread) * trail.len * 0.4 + trail.curve;
+        const cpy = oy - trail.len * 0.42;
+        const totalLen = trail.len * 1.5;
+        const dashLen = totalLen * 0.2;
+        const rgb = trail.gold ? '201,146,42' : '240,235,224';
+        const a = trail.gold ? 0.2 : 0.1;
+        const grad = ctx.createLinearGradient(ox, oy, ex, ey);
+        grad.addColorStop(0, `rgba(${rgb},${a * 1.6})`);
+        grad.addColorStop(0.55, `rgba(${rgb},${a})`);
+        grad.addColorStop(1, `rgba(${rgb},0)`);
+        ctx.save();
+        ctx.setLineDash([dashLen, totalLen]);
+        ctx.lineDashOffset = trail.dashOff;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.quadraticCurveTo(cpx, cpy, ex, ey);
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = trail.lw;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // PARTICLE SPHERE — spans the hero but weighted toward the right side
+      const sphereR = Math.min(w, h) * (isMob ? 0.42 : 0.62);
+      const fov = 900;
+      const cx = w * (isMob ? 0.5 : 0.74), cy = h * 0.46;
+      const projected = pts.map(p => {
+        const rx = p.nx * cosR + p.nz * sinR;
+        const rz = -p.nx * sinR + p.nz * cosR;
+        const depth = (rz + 1) * 0.5;
+        const persp = fov / (fov + rz * sphereR);
+        return {
+          x: rx * sphereR * persp + cx,
+          y: p.ny * sphereR * persp + cy,
+          z: rz,
+          sz: Math.max(0.2, p.sz * persp * 0.85),
+          op: p.op * (0.12 + 0.88 * depth),
+          gold: p.gold,
+        };
+      });
+      projected.sort((a, b) => a.z - b.z);
+      projected.forEach(p => {
+        if (p.z < -0.85) return;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.sz, 0, Math.PI * 2);
+        ctx.fillStyle = p.gold
+          ? `rgba(201,146,42,${p.op})`
+          : `rgba(240,235,224,${p.op})`;
+        ctx.fill();
+      });
+    };
+
+    draw();
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      window.removeEventListener('resize', resize);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute', inset: 0,
+        width: '100%', height: '100%',
+        zIndex: 1, pointerEvents: 'none',
+      }}
+    />
+  );
+}
+
+/* ── WIND TURBINE VISUAL ── */
+function WindTurbineVisual() {
+  const [health, setHealth] = useState('98.3');
   useEffect(() => {
     const t = setInterval(() => {
-      setCoreVal((97.8 + Math.random() * 0.8).toFixed(1));
+      setHealth((97.8 + Math.random() * 0.8).toFixed(1));
     }, 3000);
     return () => clearInterval(t);
   }, []);
 
+  // Primary (foreground) turbine geometry — offset right-of-center, not dead-straight
+  const HUB_X = 335, HUB_Y = 198, BLADE_R = 124;
+  const BR = BLADE_R + 14;
+  const TOWER_BASE_X = 335, TOWER_TILT = 3.5; // slight lean for a natural, non-rigid stance
+
+  // Refined tapered blade path — wider at root, sharp swept tip, slight curvature for realism
+  const BLADE = `M0,0
+    C-7,-4 -9,-14 -8,-26
+    C-7,-52 -6,-86 -4,-114
+    C-3,-126 -1.5,-${BLADE_R - 4} 0,-${BLADE_R}
+    C1.5,-${BLADE_R - 4} 3,-126 4,-114
+    C6,-86 7,-52 8,-26
+    C9,-14 7,-4 0,0 Z`;
+  const BLADE_SPINE = `M0,-10 C-1,-46 -0.5,-86 0,-${BLADE_R - 6}`;
+  const BLADE_EDGE_HI = `M-6,-20 C-5,-56 -3,-92 -1,-${BLADE_R - 8}`;
+
+  // Background (smaller, distant) turbine geometry — softer, hazier, offset lower-left, closer to horizon
+  const HUB2_X = 78, HUB2_Y = 168, BLADE2_R = 56;
+  const BR2 = BLADE2_R + 8;
+  const TOWER2_TILT = -2.5;
+  const BLADE2 = `M0,0
+    C-4,-3 -5,-9 -4,-15
+    C-3,-30 -3,-50 -2,-64
+    C-1,-70 -0.8,-${BLADE2_R - 2} 0,-${BLADE2_R}
+    C0.8,-${BLADE2_R - 2} 1,-70 2,-64
+    C3,-50 3,-30 4,-15
+    C5,-9 4,-3 0,0 Z`;
+
   const nodes = [
-    { val: '4.2ms', lbl: 'LATENCY', style: { top: 20, left: '50%', transform: 'translateX(-50%)' } },
-    { val: '48K', lbl: 'MSG/S', style: { top: '50%', right: 10, transform: 'translateY(-50%)' } },
-    { val: '1,847', lbl: 'CYCLES', style: { bottom: 20, left: '50%', transform: 'translateX(-50%)' } },
-    { val: '0.3%', lbl: 'ERR RATE', style: { top: '50%', left: 10, transform: 'translateY(-50%)' } },
+    { val: '4.2ms', lbl: 'LATENCY', s: { top: 14, left: 14 } },
+    { val: '48K/s', lbl: 'MSG/S', s: { top: 14, right: 14 } },
+    { val: '1,847', lbl: 'CYCLES', s: { bottom: 96, right: 14 } },
+    { val: '0.3%', lbl: 'ERR RATE', s: { bottom: 96, left: 14 } },
+  ];
+
+  // Deterministic "random" stars/birds so SSR/CSR stay stable
+  const birds = [
+    { x: 360, y: 88, s: 1, op: 0.5 },
+    { x: 400, y: 70, s: 0.8, op: 0.4 },
+    { x: 330, y: 110, s: 0.7, op: 0.35 },
   ];
 
   return (
-    <div style={{ position: 'relative', width: 520, height: 520 }}>
-      <div className="ring ring-1" />
-      <div className="ring ring-2" />
-      <div className="ring ring-3" />
+    <div style={{ position: 'relative', width: 540, height: 540 }}>
+      {/* ── Atmospheric backdrop: sky gradient + horizon glow ── */}
+      <svg width={540} height={540} viewBox="0 0 540 540" style={{ position: 'absolute', inset: 0 }}>
+        <defs>
+          <radialGradient id="skyGlow" cx="55%" cy="38%" r="65%">
+            <stop offset="0" stopColor="#C9922A" stopOpacity="0.10" />
+            <stop offset="45%" stopColor="#C9922A" stopOpacity="0.03" />
+            <stop offset="1" stopColor="#C9922A" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="horizonFade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#C9922A" stopOpacity="0" />
+            <stop offset="1" stopColor="#C9922A" stopOpacity="0.05" />
+          </linearGradient>
+          <radialGradient id="turbGnd" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stopColor="#C9922A" stopOpacity="0.16" />
+            <stop offset="1" stopColor="#C9922A" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="turbGnd2" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stopColor="#C9922A" stopOpacity="0.08" />
+            <stop offset="1" stopColor="#C9922A" stopOpacity="0" />
+          </radialGradient>
+          <filter id="hubGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="4" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+          <filter id="softBlur" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="0.6" />
+          </filter>
+          <linearGradient id="towerBody" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#161412" />
+            <stop offset="0.45" stopColor="#0E0D0C" />
+            <stop offset="0.55" stopColor="#0A0908" />
+            <stop offset="1" stopColor="#020202" />
+          </linearGradient>
+          <linearGradient id="towerBody2" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor="#100F0D" />
+            <stop offset="1" stopColor="#020202" />
+          </linearGradient>
+          <linearGradient id="bladeFill" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0" stopColor="#1C1A17" />
+            <stop offset="0.5" stopColor="#131210" />
+            <stop offset="1" stopColor="#0A0908" />
+          </linearGradient>
+          <linearGradient id="nacelleFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#1E1B17" />
+            <stop offset="1" stopColor="#100E0C" />
+          </linearGradient>
+        </defs>
 
-      {/* Core hexagon */}
+        {/* soft sky glow behind everything */}
+        <rect x={0} y={0} width={540} height={540} fill="url(#skyGlow)" />
+
+        {/* Faint distant mountain / horizon silhouette line for grounding */}
+        <path d="M0,470 L60,458 L120,466 L180,450 L240,462 L300,448 L360,460 L420,452 L480,464 L540,456 L540,540 L0,540 Z"
+          fill="rgba(201,146,42,0.025)" />
+
+        {/* Drifting birds for life/scale */}
+        {birds.map((b, i) => (
+          <path key={i} d={`M${b.x - 6 * b.s},${b.y} Q${b.x - 2 * b.s},${b.y - 4 * b.s} ${b.x},${b.y} Q${b.x + 2 * b.s},${b.y - 4 * b.s} ${b.x + 6 * b.s},${b.y}`}
+            fill="none" stroke={`rgba(201,146,42,${b.op})`} strokeWidth={0.8} strokeLinecap="round" />
+        ))}
+
+        {/* ═════ BACKGROUND TURBINE (distant but clearly visible, slight lean) ═════ */}
+        <g opacity={0.85} transform={`rotate(${TOWER2_TILT} ${HUB2_X} 410)`}>
+          <ellipse cx={HUB2_X} cy={410} rx={46} ry={7} fill="url(#turbGnd2)" />
+          <polygon
+            points={`${HUB2_X - 5},410 ${HUB2_X + 5},410 ${HUB2_X + 3},${HUB2_Y + 14} ${HUB2_X - 3},${HUB2_Y + 14}`}
+            fill="url(#towerBody2)" stroke="rgba(201,146,42,0.3)" strokeWidth={1}
+          />
+          <rect x={HUB2_X - 17} y={HUB2_Y - 6} width={34} height={14} rx={2} fill="rgba(14,13,12,0.97)" stroke="rgba(201,146,42,0.45)" strokeWidth={0.8} />
+          <circle cx={HUB2_X} cy={HUB2_Y} r={6} fill="rgba(10,9,8,1)" stroke="rgba(201,146,42,0.6)" strokeWidth={1.2} />
+        </g>
+      </svg>
+
+      {/* Background turbine blades — separate spin layer, slower + offset phase, matching tower lean */}
       <div style={{
-        position: 'absolute', inset: 130,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--bg-card)',
-        clipPath: 'polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)',
+        position: 'absolute',
+        left: HUB2_X - BR2,
+        top: HUB2_Y - BR2,
+        width: BR2 * 2,
+        height: BR2 * 2,
+        transform: `rotate(${TOWER2_TILT}deg)`,
+        opacity: 0.85,
       }}>
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-          <div className="core-value-anim" style={{ fontFamily: 'var(--font-display)', fontSize: 52, letterSpacing: '0.05em', color: 'var(--gold)' }}>
-            {coreVal}
-          </div>
-          <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.2em', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-            HEALTH<br />SCORE
-          </div>
-          <div style={{ fontSize: 9, color: '#27AE60', letterSpacing: '0.15em', marginTop: 4 }}>● OPERATIONAL</div>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          animation: 'turbineSpin 8s linear infinite',
+          transformOrigin: 'center',
+        }}>
+          <svg width={BR2 * 2} height={BR2 * 2} viewBox={`${-BR2} ${-BR2} ${BR2 * 2} ${BR2 * 2}`}>
+            {[0, 120, 240].map(deg => (
+              <g key={deg} transform={`rotate(${deg})`}>
+                <path d={BLADE2} fill="rgba(18,16,14,0.98)" stroke="rgba(201,146,42,0.4)" strokeWidth={0.8} />
+              </g>
+            ))}
+          </svg>
         </div>
       </div>
 
-      {/* Satellite nodes */}
-      <div className="nodes-spin" style={{ position: 'absolute', inset: 0 }}>
-        {nodes.map((n, i) => (
-          <div key={i} style={{
-            position: 'absolute', width: 56, height: 56,
-            background: 'var(--bg-card)', border: '1px solid var(--border)',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
-            ...n.style,
-          }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: 'var(--gold)' }}>{n.val}</div>
-            <div style={{ fontSize: 7, fontWeight: 600, letterSpacing: '0.12em', color: 'var(--text-muted)', textAlign: 'center' }}>{n.lbl}</div>
-          </div>
-        ))}
+      {/* ═════ MAIN SVG: ground, foreground tower, decorative rings — slight lean for a natural stance ═════ */}
+      <svg width={540} height={540} viewBox="0 0 540 540" style={{ position: 'absolute', inset: 0 }}>
+        <g transform={`rotate(${TOWER_TILT} ${TOWER_BASE_X} 502)`}>
+          {/* Ground contact glow */}
+          <ellipse cx={HUB_X} cy={504} rx={130} ry={17} fill="url(#turbGnd)" />
+          <ellipse cx={HUB_X} cy={502} rx={92} ry={10} fill="none" stroke="rgba(201,146,42,0.16)" strokeWidth={1} />
+          <ellipse cx={HUB_X} cy={502} rx={58} ry={5.5} fill="none" stroke="rgba(201,146,42,0.1)" strokeWidth={0.8} />
+
+          {/* Foundation base */}
+          <ellipse cx={HUB_X} cy={502} rx={32} ry={10} fill="rgba(12,11,10,0.95)" stroke="rgba(201,146,42,0.32)" strokeWidth={1} />
+          <ellipse cx={HUB_X} cy={499} rx={24} ry={6} fill="rgba(201,146,42,0.05)" />
+
+          {/* Access door detail at base */}
+          <rect x={HUB_X - 6} y={478} width={12} height={20} rx={1.5} fill="rgba(6,5,4,0.9)" stroke="rgba(201,146,42,0.25)" strokeWidth={0.7} />
+
+          {/* Tower body — tapered, gradient-shaded for 3D roundness */}
+          <polygon
+            points={`${HUB_X - 13},502 ${HUB_X + 13},502 ${HUB_X + 6},${HUB_Y + 22} ${HUB_X - 6},${HUB_Y + 22}`}
+            fill="url(#towerBody)" stroke="rgba(201,146,42,0.22)" strokeWidth={1}
+          />
+          {/* Tower highlight edge (light catching the curve) */}
+          <line x1={HUB_X - 8} y1={496} x2={HUB_X - 4} y2={HUB_Y + 24} stroke="rgba(232,184,75,0.16)" strokeWidth={1} />
+          {/* Tower center seam */}
+          <line x1={HUB_X} y1={502} x2={HUB_X} y2={HUB_Y + 22} stroke="rgba(0,0,0,0.25)" strokeWidth={1} />
+
+          {/* Tower stiffener rings + rivet flanges */}
+          {[440, 380, 320, 265].map((y, i) => {
+            const topY = HUB_Y + 22, botY = 502;
+            const pct = (botY - y) / (botY - topY);
+            const rx = 6 + (1 - pct) * 7;
+            return (
+              <g key={i}>
+                <ellipse cx={HUB_X} cy={y} rx={rx} ry={2.6} fill="none" stroke="rgba(201,146,42,0.13)" strokeWidth={0.8} />
+                <ellipse cx={HUB_X} cy={y + 3} rx={rx * 0.96} ry={2.2} fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth={0.6} />
+              </g>
+            );
+          })}
+
+          {/* Warning stripe near top of tower */}
+          <rect x={HUB_X - 6.4} y={HUB_Y + 24} width={12.8} height={5} fill="rgba(192,57,43,0.22)" />
+
+          {/* Nacelle housing — rounded gradient box with panel seams */}
+          <rect x={HUB_X - 30} y={HUB_Y - 16} width={62} height={28} rx={5} fill="url(#nacelleFill)" stroke="rgba(201,146,42,0.5)" strokeWidth={1} />
+          <line x1={HUB_X - 30} y1={HUB_Y - 4} x2={HUB_X + 32} y2={HUB_Y - 4} stroke="rgba(201,146,42,0.08)" strokeWidth={0.6} />
+          <rect x={HUB_X - 26} y={HUB_Y - 20} width={52} height={5} rx={1.5} fill="rgba(201,146,42,0.2)" stroke="rgba(201,146,42,0.4)" strokeWidth={0.7} />
+          {/* Anemometer mast on nacelle */}
+          <line x1={HUB_X + 24} y1={HUB_Y - 16} x2={HUB_X + 24} y2={HUB_Y - 28} stroke="rgba(201,146,42,0.35)" strokeWidth={1} />
+          <circle cx={HUB_X + 24} cy={HUB_Y - 29} r={1.6} fill="rgba(201,146,42,0.4)" />
+
+          {/* Beacon light (aviation warning) */}
+          <circle cx={HUB_X + 30} cy={HUB_Y - 18} r={2.6} fill="#C0392B">
+            <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+
+          {/* Hub — layered rings for depth + glow */}
+          <circle cx={HUB_X} cy={HUB_Y} r={15} fill="rgba(8,7,6,1)" stroke="rgba(201,146,42,0.6)" strokeWidth={1.5} filter="url(#hubGlow)" />
+          <circle cx={HUB_X} cy={HUB_Y} r={9.5} fill="rgba(14,13,11,1)" stroke="rgba(201,146,42,0.75)" strokeWidth={1} />
+          <circle cx={HUB_X} cy={HUB_Y} r={4.5} fill="#C9922A" />
+          <circle cx={HUB_X - 1.4} cy={HUB_Y - 1.4} r={1.6} fill="#F4D9A0" opacity={0.85} />
+
+          {/* Decorative telemetry orbit rings around hub */}
+          <circle cx={HUB_X} cy={HUB_Y} r={210} fill="none" stroke="rgba(201,146,42,0.045)" strokeWidth={1} strokeDasharray="4 9" />
+          <circle cx={HUB_X} cy={HUB_Y} r={164} fill="none" stroke="rgba(201,146,42,0.06)" strokeWidth={1} strokeDasharray="2 7" />
+          <circle cx={HUB_X} cy={HUB_Y} r={118} fill="none" stroke="rgba(201,146,42,0.045)" strokeWidth={0.8} strokeDasharray="1 6" />
+
+          {/* Tiny satellite telemetry blips orbiting (purely decorative, static positions) */}
+          <circle cx={HUB_X + 164} cy={HUB_Y - 14} r={1.8} fill="var(--gold-bright)" opacity={0.6} />
+          <circle cx={HUB_X - 118} cy={HUB_Y + 46} r={1.4} fill="var(--gold-bright)" opacity={0.4} />
+        </g>
+      </svg>
+
+      {/* ═════ CSS-animated blade group — foreground turbine, matching tower lean ═════ */}
+      <div style={{
+        position: 'absolute',
+        left: HUB_X - BR,
+        top: HUB_Y - BR,
+        width: BR * 2,
+        height: BR * 2,
+        transform: `rotate(${TOWER_TILT}deg)`,
+        transformOrigin: `${BR}px ${BR + (502 - HUB_Y)}px`,
+      }}>
+        <div style={{
+          width: '100%',
+          height: '100%',
+          animation: 'turbineSpin 5s linear infinite',
+          transformOrigin: 'center',
+        }}>
+          <svg width={BR * 2} height={BR * 2} viewBox={`${-BR} ${-BR} ${BR * 2} ${BR * 2}`}>
+            <defs>
+              <linearGradient id="bladeShade" x1="0" y1="1" x2="0" y2="0">
+                <stop offset="0" stopColor="#171512" />
+                <stop offset="1" stopColor="#0B0A08" />
+              </linearGradient>
+            </defs>
+            {[0, 120, 240].map(deg => (
+              <g key={deg} transform={`rotate(${deg})`}>
+                <path d={BLADE} fill="url(#bladeShade)" stroke="rgba(201,146,42,0.26)" strokeWidth={0.9} />
+                {/* leading-edge highlight for a subtle 3D pitch */}
+                <path d={BLADE_EDGE_HI} fill="none" stroke="rgba(232,184,75,0.18)" strokeWidth={0.6} strokeLinecap="round" />
+                {/* center spine shadow line */}
+                <path d={BLADE_SPINE} fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth={0.5} />
+                {/* root reinforcement collar */}
+                <ellipse cx={0} cy={-14} rx={7} ry={4} fill="none" stroke="rgba(201,146,42,0.15)" strokeWidth={0.6} />
+              </g>
+            ))}
+            {/* subtle motion-blur arcs to sell rotation speed */}
+            <circle cx={0} cy={0} r={BLADE_R * 0.94} fill="none" stroke="rgba(201,146,42,0.035)" strokeWidth={10} />
+          </svg>
+        </div>
       </div>
 
-      {/* Connector lines */}
-      <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} viewBox="0 0 520 520" xmlns="http://www.w3.org/2000/svg">
-        {[[260, 24, 260, 130], [496, 260, 390, 260], [260, 496, 260, 390], [24, 260, 130, 260]].map(([x1, y1, x2, y2], i) => (
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(201,146,42,0.15)" strokeWidth="1" strokeDasharray="4 4" />
-        ))}
-      </svg>
+      {/* Data nodes — 4 corners, clear of blade sweep zone */}
+      {nodes.map((n, i) => (
+        <div key={i} style={{
+          position: 'absolute', width: 66, height: 52,
+          background: 'rgba(14,13,12,0.88)',
+          border: '1px solid rgba(201,146,42,0.2)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 2,
+          ...n.s,
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: GOLD }}>{n.val}</div>
+          <div style={{ fontSize: 7, fontWeight: 600, letterSpacing: '0.12em', color: '#7A7060', textAlign: 'center' }}>{n.lbl}</div>
+        </div>
+      ))}
+
+      {/* Health score */}
+      <div style={{
+        position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)',
+        textAlign: 'center', pointerEvents: 'none',
+      }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, color: GOLD, lineHeight: 1 }}>{health}</div>
+        <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.2em', color: '#7A7060', marginTop: 3 }}>HEALTH SCORE</div>
+        <div style={{ fontSize: 9, color: '#27AE60', letterSpacing: '0.1em', marginTop: 3 }}>● OPERATIONAL</div>
+      </div>
     </div>
   );
 }
@@ -287,13 +679,12 @@ function Hero({ onLaunch }) {
       alignItems: 'center',
       padding: '0 48px 0 64px', gap: 0, overflow: 'hidden',
     }}>
-      {/* radial glow */}
-      <div style={{ position: 'absolute', right: -100, top: '50%', transform: 'translateY(-50%)', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(ellipse, rgba(201,146,42,0.06) 0%, transparent 65%)', pointerEvents: 'none' }} />
+      <HeroCanvas />
 
       {/* Left */}
-      <motion.div 
-        initial={{ x: -50, opacity: 0 }} 
-        animate={{ x: 0, opacity: 1 }} 
+      <motion.div
+        initial={{ x: -50, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
         style={{ paddingRight: 48 }}
       >
@@ -333,13 +724,13 @@ function Hero({ onLaunch }) {
       </motion.div>
 
       {/* Right */}
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }} 
-        animate={{ scale: 1, opacity: 1 }} 
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       >
-        <VisualCore />
+        <WindTurbineVisual />
       </motion.div>
     </section>
   );
@@ -366,7 +757,7 @@ function StatsBar() {
 function StatCell({ idx, val, suffix, label, delta, isLast, delay }) {
   const [hov, setHov] = useState(false);
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.6, delay: delay * 0.5 }}
       style={{
         padding: '40px 48px',
@@ -438,7 +829,7 @@ function ArchSection() {
 function ArchCard({ num, labelClass, label, pipeline, title, desc, delay }) {
   const [hov, setHov] = useState(false);
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.1 }} transition={{ duration: 0.6, delay: delay * 0.5 }}
       style={{
         background: hov ? 'var(--bg-card)' : 'var(--bg-panel)',
@@ -564,9 +955,9 @@ function SignalChart({ title = 'VIBRATION SPECTRUM — WIND TURBINE W-07', seed 
       intervalRef.current = intervalId;
     });
 
-    return () => { 
+    return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } 
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
   }, []);
 
@@ -626,7 +1017,7 @@ const sevBg = { critical: 'rgba(192,57,43,0.1)', warning: 'var(--gold-dim)', nom
 function AlertCard({ alert, delay }) {
   const c = sevColors[alert.sev];
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: delay * 0.5 }}
       style={{
         background: 'var(--bg)', border: `1px solid var(--border)`, borderLeft: `2px solid ${c}`,
@@ -678,7 +1069,7 @@ function MonitorSection() {
 /* ── FOOTER CTA ── */
 function FooterCTA({ onLaunch }) {
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.8 }}
       style={{
         position: 'relative', zIndex: 10,

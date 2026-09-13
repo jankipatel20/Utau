@@ -2,7 +2,8 @@
 // Contains: Sensor Heatmap, Live Sparklines for top anomalous sensors, Score decomposition bars
 // All data comes from App.tsx state — zero new logic.
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
+
 
 interface Props {
   activeDataset: string;
@@ -302,33 +303,59 @@ function ScoreBars({ scoreComponents, systemState }: Pick<Props, "scoreComponent
 function SystemTicker({ data, systemState }: Pick<Props, "data" | "systemState">) {
   const col = accent(systemState);
   const latest = data.length ? data[data.length - 1] : null;
+  const [uptime, setUptime] = useState(0);
+
+  useEffect(() => {
+    const start = Date.now();
+    const iv = setInterval(() => setUptime(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const fmt = (s: number) => {
+    const h = Math.floor(s / 3600).toString().padStart(2, "0");
+    const m = Math.floor((s % 3600) / 60).toString().padStart(2, "0");
+    const sec = (s % 60).toString().padStart(2, "0");
+    return `${h}:${m}:${sec}`;
+  };
 
   return (
     <div style={{ padding: "10px 16px 14px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-        <div style={{ width: 2, height: 12, background: col, borderRadius: 1 }} />
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.18em", color: TD }}>LIVE TELEMETRY</span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ width: 2, height: 12, background: col, borderRadius: 1 }} />
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, letterSpacing: "0.18em", color: TD }}>LIVE TELEMETRY</span>
+        </div>
+        {/* uptime counter */}
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, color: "rgba(184,134,42,0.4)", letterSpacing: "0.08em" }}>
+          ⏱ {fmt(uptime)}
+        </span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {[
-          { label: "TICK", value: latest ? `#${latest.tick}` : "—" },
-          { label: "LOSS", value: latest ? latest.system_loss.toFixed(5) : "—" },
+          { label: "TICK", value: latest ? `#${latest.tick}` : "—", color: TS },
+          { label: "LOSS", value: latest ? latest.system_loss.toFixed(5) : "—", color: latest && latest.system_loss > 0.01 ? CU : G },
           { label: "STATUS", value: systemState, color: col },
-          { label: "ANOMALY", value: latest?.is_anomalous ? "YES" : "NO", color: latest?.is_anomalous ? CR : G },
+          { label: "ANOMALY", value: latest?.is_anomalous ? "⚠ YES" : "✓ NO", color: latest?.is_anomalous ? CR : G },
         ].map((item) => (
           <div key={item.label} style={{
-            background: "rgba(184,134,42,0.05)",
-            border: "1px solid rgba(184,134,42,0.1)",
+            background: item.label === "ANOMALY" && latest?.is_anomalous
+              ? "rgba(168,50,64,0.08)"
+              : "rgba(184,134,42,0.05)",
+            border: item.label === "ANOMALY" && latest?.is_anomalous
+              ? "1px solid rgba(168,50,64,0.3)"
+              : "1px solid rgba(184,134,42,0.1)",
             borderRadius: 4, padding: "5px 8px",
+            transition: "all 0.4s ease",
           }}>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: TD, letterSpacing: "0.1em", marginBottom: 2 }}>{item.label}</div>
-            <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 600, color: item.color ?? TS }}>{item.value}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: item.color }}>{item.value}</div>
           </div>
         ))}
       </div>
     </div>
   );
 }
+
 
 // ── Divider ────────────────────────────────────────────────────────────────────
 function HudDivider() {
