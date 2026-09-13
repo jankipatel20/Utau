@@ -2544,15 +2544,16 @@ async def _send_whatsapp_alert(
     timestamp = time.strftime("%I:%M %p", time.localtime())
 
     body = (
-        f"{emoji} UTAU-IIoT ALERT\n\n"
-        f"Dataset:    {dataset}\n"
+        f"*{emoji} UTAU-IIoT ALERT*\n\n"
+        f"```\n"
         f"Severity:   {severity_level.upper()}\n"
         f"Type:       {anomaly_type}\n"
         f"Sensor:     {top_sensor}\n"
         f"Confidence: {confidence * 100:.1f}%\n"
         f"Score:      {fused_score:.4f} (thresh {threshold:.4f})\n"
-        f"Tick:       {tick} | {timestamp}\n\n"
-        f"Autonomic canary rollback initiated."
+        f"Tick:       {tick} | {timestamp}\n"
+        f"```\n"
+        f"_Autonomic canary rollback initiated._"
     )
 
     def _send_sync():
