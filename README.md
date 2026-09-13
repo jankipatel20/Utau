@@ -410,7 +410,5 @@ This project builds upon the TranAD upstream implementation. Refer to upstream T
 
 ## 🙏 Acknowledgments
 
-- **Groq** — high-speed LLM inference for SOP generation
-- **Twilio** — WhatsApp agent and pager alerts
 - **NREL** — open gearbox vibration benchmarking datasets
 - **TranAD authors** — foundational transformer architecture (VLDB 2022)
