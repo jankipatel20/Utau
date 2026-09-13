@@ -60,66 +60,52 @@ export default function AIChatPage({ onBack, systemState, activeDataset, alertEx
   }, []);
 
   const buildSystemPrompt = () => {
-    const anomalyBlock = alertExplanation
-      ? [
-          `- **Anomaly Type**: ${alertExplanation.anomaly_type}`,
-          `- **Detection Confidence**: **${(Number(alertExplanation.confidence) * 100).toFixed(2)}%**`,
-          `- **Severity**: **${(alertExplanation.severity_level || '').toUpperCase()}**`,
-          `- **Primary Failing Sensor**: **${alertExplanation.top_contributors?.[0]?.sensor}** (${Number(alertExplanation.top_contributors?.[0]?.contribution_pct || 0).toFixed(1)}% contribution)`,
-          alertExplanation.top_contributors?.length > 1
-            ? `- **All Contributors**: ${alertExplanation.top_contributors.map((c: any) => `${c.sensor} (${Number(c.contribution_pct).toFixed(1)}%)`).join(', ')}`
-            : '',
-          alertExplanation.investigation_hints?.length
-            ? `- **Investigation Hints**: ${alertExplanation.investigation_hints.join('; ')}`
-            : '',
-        ].filter(Boolean).join('\n')
-      : '- No active anomaly. All sensor streams are within operational thresholds.';
+    const isDomain = domainContext && domainContext.domain !== 'generic';
+
+    const anomalyLines: string[] = [];
+    if (alertExplanation) {
+      anomalyLines.push(`Type: ${alertExplanation.anomaly_type}, Severity: ${(alertExplanation.severity_level || '').toUpperCase()}, Confidence: ${(Number(alertExplanation.confidence) * 100).toFixed(1)}%`);
+      if (alertExplanation.top_contributors?.length) {
+        anomalyLines.push(`Top sensors: ${alertExplanation.top_contributors.slice(0, 3).map((c: any) => `${c.sensor_label || c.sensor} (${Number(c.contribution_pct).toFixed(1)}%)`).join(', ')}`);
+      }
+      if (alertExplanation.investigation_hints?.length) {
+        anomalyLines.push(`Hints: ${alertExplanation.investigation_hints.slice(0, 2).join('; ')}`);
+      }
+    }
 
     const metricsLine = currentMetrics
-      ? `- **System Loss**: ${Number(currentMetrics.system_loss).toFixed(4)} | **Threshold**: ${Number(currentMetrics.threshold).toFixed(4)}`
+      ? `System Loss: ${Number(currentMetrics.system_loss).toFixed(4)}, Threshold: ${Number(currentMetrics.threshold).toFixed(4)}`
       : '';
 
-    const dbBlock = feedbackHistory.length > 0
-      ? feedbackHistory.map((f: any, i: number) =>
-          `- **[#${i + 1}]** ${f.dataset} | Tick ${f.tick} | ${f.was_anomaly ? '🔴 CONFIRMED' : '⚪ DISMISSED'} | **${f.anomaly_type}** | Severity: ${f.severity_level} | Confidence: **${(Number(f.confidence) * 100).toFixed(1)}%** | Calibration: ${f.calibrate_requested ? 'YES' : 'NO'} | Note: _"${f.note || 'none'}"_`
-        ).join('\n')
-      : '- No records available. Backend may be offline.';
+    const feedbackLines = feedbackHistory.slice(0, 5).map((f: any, i: number) =>
+      `#${i + 1} ${f.was_anomaly ? 'CONFIRMED' : 'DISMISSED'} ${f.anomaly_type} severity:${f.severity_level} conf:${(Number(f.confidence) * 100).toFixed(0)}%`
+    ).join('\n');
 
-    const isDomain = domainContext && domainContext.domain !== 'generic';
-    const domainBlock = isDomain
-      ? `\n## DOMAIN CONTEXT: ${domainContext.domain.toUpperCase()} PREDICTIVE MAINTENANCE
-- **Asset Type**: ${domainContext.asset_label}
-- **Sensor Fields**: ${domainContext.fields?.map((f: any) => `${f.label} (${f.unit})`).join(', ') || 'n/a'}
-- **Known Fault Patterns**: ${domainContext.fault_types?.map((ft: any) => `**${ft.name}**: ${ft.description}`).join('; ') || 'n/a'}
-- **Revenue Impact**: $${domainContext.revenue_loss?.total_revenue_loss_usd?.toFixed(2) || '0.00'} total loss (${domainContext.revenue_loss?.total_energy_loss_kwh?.toFixed(4) || '0'} kWh)
-`
-      : '';
+    const domainLines = isDomain ? [
+      `Asset: ${domainContext.asset_label}`,
+      `Sensors: ${domainContext.fields?.map((f: any) => f.label).join(', ') || 'n/a'}`,
+      `Known faults: ${domainContext.fault_types?.map((ft: any) => ft.name).join(', ') || 'n/a'}`,
+      domainContext.revenue_loss?.total_revenue_loss_usd > 0 ? `Revenue loss: $${domainContext.revenue_loss.total_revenue_loss_usd.toFixed(2)}` : '',
+    ].filter(Boolean).join('\n') : '';
 
-    const roleDesc = isDomain
-      ? `You are UTAU-CORE, a predictive maintenance AI for ${domainContext.domain} energy assets.`
-      : 'You are UTAU-CORE, an elite industrial AI embedded inside a hardened IIoT command center.';
+    return `You are the UTAU AI Copilot 🛡️ — an expert predictive maintenance assistant for ${isDomain ? domainContext.domain : 'industrial'} energy assets. You're knowledgeable, helpful, and proactive.
 
-    return `${roleDesc}
-You have DIRECT READ ACCESS to live telemetry, real-time anomaly scores, and the operator feedback database.
-${domainBlock}
-## LIVE TELEMETRY CONTEXT
-- **Dataset**: ${activeDataset || 'UNKNOWN'}
-- **System State**: **${systemState || 'UNKNOWN'}**
-${anomalyBlock}
-${metricsLine}
+LIVE SYSTEM CONTEXT:
+• State: ${systemState || 'UNKNOWN'}
+${metricsLine ? `• ${metricsLine}` : ''}
+${anomalyLines.length ? '• ⚠️ Active anomaly:\n  ' + anomalyLines.join('\n  ') : '• ✅ No active anomaly.'}
+${domainLines ? '\n🏭 Domain:\n' + domainLines : ''}
+${feedbackLines ? '\n📋 Recent events:\n' + feedbackLines : ''}
 
-## OPERATOR FEEDBACK DATABASE (${feedbackHistory.length} record${feedbackHistory.length !== 1 ? 's' : ''})
-${dbBlock}
-
-## YOUR RESPONSE RULES
-1. **Be direct and terse** — this is a military-grade terminal. No filler phrases.
-2. **Lead with the most critical finding** — never bury the important info.
-3. **Always cite DB record numbers** (#1, #2) when referencing past incidents.
-4. **Format every response using Markdown** — use ## headers, **bold** for numbers/sensors/severities, bullet lists for multi-point analysis.
-5. **Never invent or speculate** beyond what is present in the telemetry context and DB above.
-6. **If asked a question with data available**, answer it fully and concisely without asking for further permission.${isDomain ? `
-7. **Use hedged causal language** — say "this pattern is consistent with" or "likely indicates" rather than definitive "caused by" claims. Root-cause attribution in renewable energy assets is inherently uncertain due to weather confounds.
-8. **Reference domain-specific fault types** when explaining anomalies — use the known fault patterns above to reason toward plausible explanations.` : ''}`;
+RULES:
+1. Answer what the user asked. Be helpful and specific — if context suggests a useful follow-up, add ONE short line.
+2. Keep responses concise — 2-4 sentences for simple questions, bullet points for lists.
+3. Use data from the context above. If data is unavailable, say so and suggest what the user can check.
+4. Never invent sensor readings. Say "likely indicates" not "caused by".
+5. Use emojis sparingly to make responses scannable (⚠️ for warnings, ✅ for healthy, 📊 for data, 🔧 for actions).
+6. Use markdown: **bold** for key values, bullet lists for multiple items.
+7. Be actionable — when reporting an issue, suggest what the operator should do next.
+8. Do not repeat the question back. No greetings or sign-offs.`;
   };
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -138,22 +124,19 @@ ${dbBlock}
     try {
 
       const systemMessage = { role: 'system', content: buildSystemPrompt() };
-      const apiHistory = messages.map(m => ({ role: m.role, content: m.content }));
+      const recentHistory = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
 
       const res = await fetch('http://127.0.0.1:8000/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-          messages: [systemMessage, ...apiHistory, { role: 'user', content: userMsg }],
-          temperature: 0.15,
+          messages: [systemMessage, ...recentHistory, { role: 'user', content: userMsg }],
+          temperature: 0.1,
         })
       });
 
       if (!res.ok) {
-        throw new Error(`Groq API Failed: ${res.statusText}. Verify VITE_GROQ_API_KEY in .env.`);
+        throw new Error(`AI Copilot request failed: ${res.statusText}`);
       }
 
       const raw = await res.json();

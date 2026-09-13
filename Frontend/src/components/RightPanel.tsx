@@ -90,7 +90,7 @@
 //           <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, color: TD, fontStyle: 'italic', padding: '4px 4px' }}>no historical matches</p>
 //         ) : sims.map((s, i) => (
 //           <div key={i} className="panel-recessed" style={{ padding: '7px 10px', borderLeft: `2px solid ${G}30` }}>
-//             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 8, color: TS, marginBottom: 4, letterSpacing: '0.1em' }}>{s.dataset} @ tick {s.tick}</div>
+//             <div style={{ fontFamily: "'Cinzel', serif", fontSize: 8, color: TS, marginBottom: 4, letterSpacing: '0.1em' }}>{s.dataset === 'solar_synthetic' ? 'Solar Array' : s.dataset === 'wind_synthetic' ? 'Wind Farm' : s.dataset === 'synthetic' ? 'Generic' : s.dataset.replace(/_synthetic/g, '').replace(/_/g, ' ')} @ tick {s.tick}</div>
 //             <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, color: TD, margin: 0, lineHeight: 1.4 }}>{s.summary.slice(0, 65)}…</p>
 //           </div>
 //         ))}
@@ -249,7 +249,7 @@ export function SimilarIncidents({ alertExplanation }: { alertExplanation: Alert
           <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, color: TD, fontStyle: 'italic', padding: '4px 4px' }}>no historical matches</p>
         ) : sims.map((s, i) => (
           <div key={i} className="panel-recessed" style={{ padding: '7px 10px', borderLeft: `2px solid ${G}30` }}>
-            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 8, color: TS, marginBottom: 4, letterSpacing: '0.1em' }}>{s.dataset} @ tick {s.tick}</div>
+            <div style={{ fontFamily: "'Cinzel', serif", fontSize: 8, color: TS, marginBottom: 4, letterSpacing: '0.1em' }}>{s.dataset === 'solar_synthetic' ? 'Solar Array' : s.dataset === 'wind_synthetic' ? 'Wind Farm' : s.dataset === 'synthetic' ? 'Generic' : s.dataset.replace(/_synthetic/g, '').replace(/_/g, ' ')} @ tick {s.tick}</div>
             <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 12, color: TD, margin: 0, lineHeight: 1.4 }}>{s.summary.slice(0, 65)}…</p>
           </div>
         ))}

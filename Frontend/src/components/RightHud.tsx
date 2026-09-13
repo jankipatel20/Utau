@@ -277,7 +277,7 @@ function EventTimeline({ alertExplanation }: { alertExplanation: AlertExplanatio
                   border: `1px solid ${i === 0 ? G : "rgba(184,134,42,0.2)"}`,
                 }} />
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: TD, letterSpacing: "0.08em", marginBottom: 1 }}>
-                  TICK #{ev.tick} · {ev.dataset}
+                  TICK #{ev.tick} · {ev.dataset === 'solar_synthetic' ? 'Solar Array' : ev.dataset === 'wind_synthetic' ? 'Wind Farm' : ev.dataset === 'synthetic' ? 'Generic' : ev.dataset.replace(/_synthetic/g, '').replace(/_/g, ' ')}
                   {ev.similarity !== undefined && (
                     <span style={{ color: G, marginLeft: 4 }}>
                       {(ev.similarity * 100).toFixed(0)}% match

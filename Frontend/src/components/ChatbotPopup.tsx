@@ -65,73 +65,60 @@ export default function ChatbotPopup({
     fetch('http://127.0.0.1:8000/api/domain_context')
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setDomainContext(d); })
-      .catch(() => {});
+      .catch(() => { });
   }, [activeDataset, isOpen]);
 
   useEffect(() => {
     fetch('http://127.0.0.1:8000/api/feedback_history?limit=10')
       .then(r => r.ok ? r.json() : [])
       .then(d => setFeedbackHistory(Array.isArray(d) ? d : []))
-      .catch(() => {});
+      .catch(() => { });
   }, [isOpen]);
 
   const buildSystemPrompt = () => {
-    const anomalyBlock = alertExplanation
-      ? [
-          `- Anomaly Type: ${alertExplanation.anomaly_type}`,
-          `- Detection Confidence: ${(Number(alertExplanation.confidence) * 100).toFixed(1)}%`,
-          `- Severity: ${(alertExplanation.severity_level || '').toUpperCase()}`,
-          `- Primary Sensor: ${alertExplanation.top_contributors?.[0]?.sensor} (${Number(alertExplanation.top_contributors?.[0]?.contribution_pct || 0).toFixed(1)}%)`,
-          alertExplanation.investigation_hints?.length
-            ? `- Hints: ${alertExplanation.investigation_hints.join('; ')}`
-            : '',
-        ].filter(Boolean).join('\n')
-      : '- No active anomaly. All sensors nominal.';
+    const isDomain = domainContext && domainContext.domain !== 'generic';
+
+    const anomalyLines: string[] = [];
+    if (alertExplanation) {
+      anomalyLines.push(`Type: ${alertExplanation.anomaly_type}, Severity: ${(alertExplanation.severity_level || '').toUpperCase()}, Confidence: ${(Number(alertExplanation.confidence) * 100).toFixed(1)}%`);
+      if (alertExplanation.top_contributors?.length) {
+        anomalyLines.push(`Top sensors: ${alertExplanation.top_contributors.slice(0, 3).map((c: any) => `${c.sensor_label || c.sensor} (${Number(c.contribution_pct).toFixed(1)}%)`).join(', ')}`);
+      }
+    }
 
     const metricsLine = currentMetrics
-      ? `- System Loss: ${Number(currentMetrics.system_loss).toFixed(4)} | Threshold: ${Number(currentMetrics.threshold).toFixed(4)}`
+      ? `System Loss: ${Number(currentMetrics.system_loss).toFixed(4)}, Threshold: ${Number(currentMetrics.threshold).toFixed(4)}`
       : '';
 
-    const dbBlock = feedbackHistory.length > 0
-      ? feedbackHistory.map((f: any, i: number) =>
-          `- [#${i + 1}] ${f.dataset} | Tick ${f.tick} | ${f.was_anomaly ? 'CONFIRMED' : 'DISMISSED'} | ${f.anomaly_type} | Severity: ${f.severity_level}`
-        ).join('\n')
-      : '- No feedback records.';
+    const feedbackLines = feedbackHistory.slice(0, 5).map((f: any, i: number) =>
+      `#${i + 1} ${f.was_anomaly ? 'CONFIRMED' : 'DISMISSED'} ${f.anomaly_type} severity:${f.severity_level}`
+    ).join('\n');
 
-    const isDomain = domainContext && domainContext.domain !== 'generic';
-    const domainBlock = isDomain
-      ? `\n## DOMAIN: ${domainContext.domain.toUpperCase()} PREDICTIVE MAINTENANCE
-- Asset: ${domainContext.asset_label}
-- Sensors: ${domainContext.fields?.map((f: any) => `${f.label} (${f.unit})`).join(', ') || 'n/a'}
-- Known faults: ${domainContext.fault_types?.map((ft: any) => ft.name).join(', ') || 'n/a'}
-- Revenue loss: $${domainContext.revenue_loss?.total_revenue_loss_usd?.toFixed(2) || '0.00'}
-`
-      : '';
+    const domainLines = isDomain ? [
+      `Asset: ${domainContext.asset_label}`,
+      `Sensors: ${domainContext.fields?.map((f: any) => f.label).join(', ') || 'n/a'}`,
+      `Known faults: ${domainContext.fault_types?.map((ft: any) => ft.name).join(', ') || 'n/a'}`,
+    ].join('\n') : '';
 
-    const role = isDomain
-      ? `You are UTAU-CORE, a predictive maintenance AI for ${domainContext.domain} energy assets.`
-      : 'You are UTAU-CORE, an elite IIoT anomaly detection AI embedded in a real-time command center.';
+    return `You are the UTAU AI Copilot 🛡️ — an expert predictive maintenance assistant for ${isDomain ? domainContext.domain : 'industrial'} energy assets. You're knowledgeable, helpful, and proactive.
 
-    return `${role}
-You have access to live telemetry and an operator feedback database.
-${domainBlock}
-## LIVE TELEMETRY
-- Dataset: ${activeDataset || 'UNKNOWN'}
-- System State: ${systemState || 'UNKNOWN'}
-${anomalyBlock}
-${metricsLine}
+LIVE SYSTEM CONTEXT:
+• State: ${systemState || 'UNKNOWN'}
+${metricsLine ? `• ${metricsLine}` : ''}
+${anomalyLines.length ? '• ⚠️ Active anomaly:\n  ' + anomalyLines.join('\n  ') : '• ✅ No active anomaly.'}
+${domainLines ? '\n🏭 Domain:\n' + domainLines : ''}
+${feedbackLines ? '\n📋 Recent events:\n' + feedbackLines : ''}
 
-## OPERATOR FEEDBACK (${feedbackHistory.length} records)
-${dbBlock}
-
-## RULES
-1. Be direct, concise, actionable. No filler phrases.
-2. Lead with the most critical finding.
-3. Use Markdown formatting (bold, bullet lists, headers).
-4. Never speculate beyond available data.
-5. Reference DB records by number (#1, #2) when relevant.${isDomain ? `
-6. Use hedged language for root-cause claims ("consistent with", "likely indicates").
-7. Reference domain-specific fault patterns when explaining anomalies.` : ''}`;
+RULES:
+1. Answer what the user asked. Be helpful and specific — if context suggests a useful follow-up, add ONE short line.
+2. Keep responses concise — 2-4 sentences for simple questions, bullet points for lists.
+3. Use data from the context above. If data is unavailable, say so and suggest what the user can check.
+4. Never invent sensor readings. Say "likely indicates" not "caused by".
+5. Use emojis sparingly to make responses scannable (⚠️ for warnings, ✅ for healthy, 📊 for data, 🔧 for actions).
+6. Use markdown: **bold** for key values, bullet lists for multiple items.
+7. Be actionable — when reporting an issue, suggest what the operator should do next.
+8. Do not repeat the question back. No greetings or sign-offs.
+9. Strictly answer about UTAU only, no general knowledge answer should be given, if such questions are asked then politely remind user what you are for`;
   };
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -151,21 +138,18 @@ ${dbBlock}
     try {
 
       const systemMessage = { role: 'system', content: buildSystemPrompt() };
-      const apiHistory = messages.map(m => ({ role: m.role, content: m.content }));
+      const recentHistory = messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
 
       const res = await fetch('http://127.0.0.1:8000/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-          messages: [systemMessage, ...apiHistory, { role: 'user', content: userMsg }],
-          temperature: 0.15,
+          messages: [systemMessage, ...recentHistory, { role: 'user', content: userMsg }],
+          temperature: 0.1,
         }),
       });
 
-      if (!res.ok) throw new Error(`Groq API error: ${res.statusText}`);
+      if (!res.ok) throw new Error(`AI Copilot request failed: ${res.statusText}`);
       const raw = await res.json();
       const botResponse = raw.choices?.[0]?.message?.content || 'No response from AI core.';
 
@@ -189,8 +173,8 @@ ${dbBlock}
 
   const severityColor =
     alertExplanation?.severity_level === 'critical' ? '#ef4444'
-    : alertExplanation?.severity_level === 'warning' ? '#f59e0b'
-    : 'var(--gold, #C9921A)';
+      : alertExplanation?.severity_level === 'warning' ? '#f59e0b'
+        : 'var(--gold, #C9921A)';
 
   return (
     <>

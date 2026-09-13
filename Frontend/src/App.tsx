@@ -314,7 +314,7 @@
 //                 SYSTEM SEVERITY: CRITICAL
 //               </span>
 //               <span style={{ color: 'var(--text-secondary)', fontFamily: "'Cormorant Garamond', serif", fontSize: 15, marginTop: 2 }}>
-//                 {anomalyPopup.msg} IN <strong style={{ color: 'var(--text-primary)' }}>{anomalyPopup.dataset.toUpperCase()}</strong>
+//                 {anomalyPopup.msg} IN <strong style={{ color: 'var(--text-primary)' }}>{datasetDisplayName(anomalyPopup.dataset).toUpperCase()}</strong>
 //               </span>
 //             </div>
 //             <X size={16} color="var(--text-dim)" style={{ marginLeft: 16 }} />
@@ -434,6 +434,14 @@ const DATASET_TABS = [
   { label: 'GENERIC',      value: 'synthetic'       },
 ];
 
+const datasetDisplayName = (ds: string): string => {
+  if (ds === 'solar_synthetic') return 'Solar Array';
+  if (ds === 'wind_synthetic') return 'Wind Farm';
+  if (ds === 'synthetic') return 'Generic';
+  return ds.replace(/_synthetic/g, '').replace(/_/g, ' ');
+};
+export { datasetDisplayName };
+
 const featureFlag = (value: unknown, defaultValue = false): boolean => {
   if (typeof value !== 'string') return defaultValue;
   return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
@@ -540,7 +548,7 @@ export default function App() {
           body: JSON.stringify({
             messages: [{
               role: 'user', 
-              content: `Write a short 2-sentence executive summary for an industrial health report. The current system state is ${systemState}, active asset is ${activeDataset}, and there are ${history.length} historical events logged. Be highly professional and concise.`
+              content: `Write a short 2-sentence executive summary for an industrial health report. The current system state is ${systemState}, active asset is ${datasetDisplayName(activeDataset)}, and there are ${history.length} historical events logged. Be highly professional and concise.`
             }],
             temperature: 0.3
           })
@@ -1063,7 +1071,7 @@ export default function App() {
                 SYSTEM SEVERITY: CRITICAL
               </span>
               <span style={{ color: 'var(--text-secondary)', fontFamily: "'Cormorant Garamond', serif", fontSize: 15, marginTop: 2 }}>
-                {anomalyPopup.msg} IN <strong style={{ color: 'var(--text-primary)' }}>{anomalyPopup.dataset.toUpperCase()}</strong>
+                {anomalyPopup.msg} IN <strong style={{ color: 'var(--text-primary)' }}>{datasetDisplayName(anomalyPopup.dataset).toUpperCase()}</strong>
               </span>
             </div>
             <X size={16} color="var(--text-dim)" style={{ marginLeft: 16 }} />

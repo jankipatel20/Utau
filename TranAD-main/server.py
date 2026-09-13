@@ -3040,33 +3040,56 @@ async def get_anomaly_source(anomaly_id: int):
 @app.post("/api/chat")
 async def chat_proxy(payload: ChatRequest):
     provider, api_key, endpoint = _sop_llm_config()
+    key_preview = f"{api_key[:8]}...{api_key[-4:]}" if len(api_key) > 12 else "(empty)"
+    print(f"[CHAT] provider={provider}, endpoint={endpoint}, key={key_preview}, model={SOP_GROQ_MODEL}")
+
     if not api_key:
         raise HTTPException(status_code=503, detail="llm_not_configured")
 
     model = payload.model or (SOP_GROQ_MODEL if provider == "groq" else SOP_OPENAI_MODEL)
-    request_body = {
-        "model": model,
-        "messages": payload.messages,
-        "temperature": payload.temperature,
-    }
+    msgs = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in payload.messages]
 
-    try:
+    _FALLBACK_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+
+    async def _try_chat(use_model: str) -> dict:
+        body = {"model": use_model, "messages": msgs, "temperature": payload.temperature}
         req = urllib.request.Request(
             endpoint,
-            data=json.dumps(request_body).encode("utf-8"),
+            data=json.dumps(body).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0",
             },
             method="POST",
         )
         def _fetch():
-            with urllib.request.urlopen(req, timeout=30) as response:
-                return response.read().decode("utf-8")
-        body = await asyncio.to_thread(_fetch)
-        parsed = json.loads(body)
-        return parsed
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    return response.read().decode("utf-8")
+            except urllib.error.HTTPError as he:
+                err_body = he.read().decode("utf-8", errors="replace") if he.fp else ""
+                print(f"[CHAT] Groq error {he.code} for model '{use_model}': {err_body[:300]}")
+                raise
+        raw = await asyncio.to_thread(_fetch)
+        return json.loads(raw)
+
+    try:
+        return await _try_chat(model)
+    except urllib.error.HTTPError as e:
+        print(f"[CHAT] Primary model '{model}' failed ({e.code}), trying fallbacks...")
+        last_err = e
+        for fb in _FALLBACK_MODELS:
+            if fb == model:
+                continue
+            try:
+                result = await _try_chat(fb)
+                print(f"[CHAT] Fallback model '{fb}' succeeded")
+                return result
+            except Exception as fb_err:
+                last_err = fb_err
+                continue
+        raise HTTPException(status_code=502, detail=f"All models failed. Last: {last_err}")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

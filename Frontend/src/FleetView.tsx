@@ -147,10 +147,10 @@ export default function FleetView({ onBack, activeDataset }: FleetViewProps) {
           <div style={{ textAlign: 'center', padding: 60 }}>
             <Layers size={48} color={TD} style={{ marginBottom: 16 }} />
             <p style={{ fontFamily: 'var(--font-serif)', fontSize: 16, color: TD }}>
-              No fleet assets available for <strong>{activeDataset}</strong>
+              No fleet assets available for <strong>{activeDataset === 'solar_synthetic' ? 'Solar Array' : activeDataset === 'wind_synthetic' ? 'Wind Farm' : activeDataset === 'synthetic' ? 'Generic' : activeDataset.replace(/_synthetic/g, '').replace(/_/g, ' ')}</strong>
             </p>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: TD, marginTop: 8 }}>
-              Fleet view is available for solar_synthetic and wind_synthetic datasets.
+              Fleet view is available for Solar Array and Wind Farm datasets.
             </p>
           </div>
         ) : (

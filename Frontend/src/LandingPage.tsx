@@ -644,14 +644,14 @@ function WindTurbineVisual() {
       ))}
 
       {/* Health score */}
-      <div style={{
+      {/* <div style={{
         position: 'absolute', bottom: 92, left: '50%', transform: 'translateX(-50%)',
         textAlign: 'center', pointerEvents: 'none',
       }}>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, color: GOLD, lineHeight: 1 }}>{health}</div>
         <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: '0.2em', color: '#7A7060', marginTop: 3 }}>HEALTH SCORE</div>
         <div style={{ fontSize: 9, color: '#27AE60', letterSpacing: '0.1em', marginTop: 3 }}>● OPERATIONAL</div>
-      </div>
+      </div> */}
     </div>
   );
 }
